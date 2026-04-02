@@ -1,21 +1,35 @@
 import os
-from typing import List
-from pydantic_settings import BaseSettings
+from typing import List, Union
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
 
-
 class Settings(BaseSettings):
-    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
-    ADMIN_IDS: List[int] = [int(id) for id in os.getenv("ADMIN_IDS", "").split(",") if id]
+    # Указываем Pydantic, что нужно брать данные из окружения
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./bot.db")
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    BOT_TOKEN: str
+    # Используем Union, чтобы он не ругался при первичной загрузке
+    ADMIN_IDS: List[int]
 
-    DEFAULT_DAILY_LIMIT: int = int(os.getenv("DEFAULT_DAILY_LIMIT", "5"))
-    MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
-    DOWNLOAD_TIMEOUT: int = int(os.getenv("DOWNLOAD_TIMEOUT", "60"))
+    DATABASE_URL: str = "sqlite+aiosqlite:///./bot.db"
+    REDIS_URL: str = "redis://localhost:6379/0"
 
+    DEFAULT_DAILY_LIMIT: int = 5
+    MAX_RETRIES: int = 3
+    DOWNLOAD_TIMEOUT: int = 60
+
+    @field_validator("ADMIN_IDS", mode="before")
+    @classmethod
+    def parse_admin_ids(cls, v: Union[str, List[int], int]) -> List[int]:
+        if isinstance(v, str):
+            # Убираем лишние пробелы и скобки, если они вдруг прилетят
+            v = v.replace("[", "").replace("]", "").strip()
+            return [int(i.strip()) for i in v.split(",") if i.strip()]
+        if isinstance(v, int):
+            return [v]
+        return v
 
 settings = Settings()
