@@ -1,0 +1,90 @@
+{
+    "en": {
+        "welcome": "Hello {name}! Send me a link to a video (TikTok, Instagram Reels, YouTube Shorts, etc.)",
+        "choose_language": "Choose your language:",
+        "language_set": "Language updated!",
+        "unsupported_url": "Unsupported URL. Please send a supported link.",
+        "processing": "Downloading video, please wait...",
+        "banned": "You are banned from using this bot.",
+        "daily_limit_reached": "Daily limit reached. Upgrade to premium for unlimited downloads.",
+        "premium_active": "You have premium active until {until}.",
+        "premium_info": "Premium gives you unlimited downloads without ads. Contact admin to buy."
+    },
+    "ru": {
+        "welcome": "Привет {name}! Отправь ссылку на видео (TikTok, Instagram Reels, YouTube Shorts и др.)",
+        "choose_language": "Выбери язык:",
+        "language_set": "Язык обновлён!",
+        "unsupported_url": "Неподдерживаемая ссылка. Отправь поддерживаемую ссылку.",
+        "processing": "Скачиваю видео, подожди...",
+        "banned": "Ты забанен в этом боте.",
+        "daily_limit_reached": "Дневной лимит исчерпан. Купи премиум для безлимита.",
+        "premium_active": "У тебя активен премиум до {until}.",
+        "premium_info": "Премиум даёт безлимитные скачивания без рекламы. Свяжись с админом для покупки."
+    },
+    "es": {
+        "welcome": "¡Hola {name}! Envíame un enlace a un vídeo (TikTok, Instagram Reels, YouTube Shorts, etc.)",
+        "choose_language": "Elige tu idioma:",
+        "language_set": "Idioma actualizado.",
+        "unsupported_url": "Enlace no soportado. Envía un enlace válido.",
+        "processing": "Descargando vídeo, espera...",
+        "banned": "Has sido baneado de este bot.",
+        "daily_limit_reached": "Límite diario alcanzado. Actualiza a premium.",
+        "premium_active": "Premium activo hasta {until}.",
+        "premium_info": "Premium te da descargas ilimitadas sin anuncios."
+    },
+    "pt": {
+        "welcome": "Olá {name}! Envie-me um link de vídeo (TikTok, Instagram Reels, YouTube Shorts, etc.)",
+        "choose_language": "Escolha seu idioma:",
+        "language_set": "Idioma atualizado!",
+        "unsupported_url": "Link não suportado. Envie um link suportado.",
+        "processing": "Baixando vídeo, aguarde...",
+        "banned": "Você foi banido deste bot.",
+        "daily_limit_reached": "Limite diário atingido. Atualize para premium.",
+        "premium_active": "Premium ativo até {until}.",
+        "premium_info": "Premium dá downloads ilimitados sem anúncios."
+    },
+    "de": {
+        "welcome": "Hallo {name}! Sende mir einen Link zu einem Video (TikTok, Instagram Reels, YouTube Shorts usw.)",
+        "choose_language": "Wähle deine Sprache:",
+        "language_set": "Sprache aktualisiert!",
+        "unsupported_url": "Nicht unterstützter Link. Sende einen unterstützten Link.",
+        "processing": "Video wird heruntergeladen, bitte warten...",
+        "banned": "Du wurdest von diesem Bot verbannt.",
+        "daily_limit_reached": "Tageslimit erreicht. Upgrade auf Premium.",
+        "premium_active": "Premium aktiv bis {until}.",
+        "premium_info": "Premium bietet unbegrenzte Downloads ohne Werbung."
+    },
+    "fr": {
+        "welcome": "Bonjour {name}! Envoyez-moi un lien vidéo (TikTok, Instagram Reels, YouTube Shorts, etc.)",
+        "choose_language": "Choisissez votre langue:",
+        "language_set": "Langue mise à jour!",
+        "unsupported_url": "Lien non supporté. Envoyez un lien supporté.",
+        "processing": "Téléchargement de la vidéo, veuillez patienter...",
+        "banned": "Vous êtes banni de ce bot.",
+        "daily_limit_reached": "Limite quotidienne atteinte. Passez à premium.",
+        "premium_active": "Premium actif jusqu'au {until}.",
+        "premium_info": "Premium offre des téléchargements illimités sans publicité."
+    },
+    "hi": {
+        "welcome": "नमस्ते {name}! मुझे एक वीडियो लिंक भेजें (TikTok, Instagram Reels, YouTube Shorts, आदि)",
+        "choose_language": "अपनी भाषा चुनें:",
+        "language_set": "भाषा अपडेट की गई!",
+        "unsupported_url": "असमर्थित लिंक। कृपया समर्थित लिंक भेजें।",
+        "processing": "वीडियो डाउनलोड हो रहा है, कृपया प्रतीक्षा करें...",
+        "banned": "आपको इस बॉट से प्रतिबंधित कर दिया गया है।",
+        "daily_limit_reached": "दैनिक सीमा समाप्त। प्रीमियम के लिए अपग्रेड करें।",
+        "premium_active": "प्रीमियम {until} तक सक्रिय है।",
+        "premium_info": "प्रीमियम आपको बिना विज्ञापन के असीमित डाउनलोड देता है।"
+    },
+    "ar": {
+        "welcome": "مرحباً {name}! أرسل لي رابط فيديو (تيك توك، إنستغرام ريلز، يوتيوب شورتس، إلخ)",
+        "choose_language": "اختر لغتك:",
+        "language_set": "تم تحديث اللغة!",
+        "unsupported_url": "رابط غير مدعوم. يرجى إرسال رابط مدعوم.",
+        "processing": "جاري تحميل الفيديو، يرجى الانتظار...",
+        "banned": "لقد تم حظرك من هذا البوت.",
+        "daily_limit_reached": "تم الوصول إلى الحد اليومي. قم بالترقية إلى بريميوم.",
+        "premium_active": "بريميوم نشط حتى {until}.",
+        "premium_info": "بريميوم يمنحك تحميلات غير محدودة بدون إعلانات."
+    }
+}
