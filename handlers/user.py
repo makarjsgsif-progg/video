@@ -1,8 +1,8 @@
 from aiogram import Router, F, Bot
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command, CommandStart
 
-from database.database import async_session_maker, UserRepo, User
+from database.database import async_session_maker, UserRepo
 from services.services import QueueService, LimitService
 from utils.platform_detector import detect_platform
 from utils.i18n import languages
@@ -27,71 +27,114 @@ def get_limit_service() -> LimitService:
     return _limit_service
 
 
+def main_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📥 Скачать видео"), KeyboardButton(text="👤 Мой профиль")],
+            [KeyboardButton(text="🔗 Реферальная ссылка"), KeyboardButton(text="💎 Premium")],
+            [KeyboardButton(text="🌍 Язык"), KeyboardButton(text="📊 Статистика")],
+        ],
+        resize_keyboard=True,
+        input_field_placeholder="Вставь ссылку на видео...",
+    )
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, gettext, user_db, bot: Bot):
-    """
-    /start         — обычный старт
-    /start REF_CODE — старт с реферальным кодом
-    """
     args = message.text.split(maxsplit=1)
-    ref_code = args[1].strip() if len(args) > 1 else None
+    ref_arg = args[1].strip() if len(args) > 1 else None
 
-    # Обрабатываем реферала:
-    # - пользователь ещё не был привязан к рефереру
-    # - переданный код не является его собственным
-    if (
-        ref_code
-        and user_db.referred_by is None
-        and ref_code != user_db.referral_code
-    ):
-        async with async_session_maker() as session:
-            repo = UserRepo(session)
-            referrer = await repo.get_user_by_referral_code(ref_code)
+    # Реферальная система по user_id (ссылка вида ?start=123456789)
+    if ref_arg and user_db.referred_by is None:
+        try:
+            referrer_id = int(ref_arg)
+            if referrer_id != message.from_user.id:
+                async with async_session_maker() as session:
+                    repo = UserRepo(session)
+                    referrer = await repo.get_user(referrer_id)
+                    if referrer:
+                        await repo.set_referred_by(message.from_user.id, referrer_id)
+                        await repo.increment_referral_count(referrer_id)
+                        await session.commit()
+                        await get_limit_service().add_referral_bonus(referrer_id, amount=5)
+                        try:
+                            await bot.send_message(
+                                referrer_id,
+                                f"🎉 <b>По твоей ссылке зашёл новый пользователь!</b>\n\n"
+                                f"Тебе начислено <b>+5 бонусных загрузок</b> 🚀\n\n"
+                                f"Продолжай делиться — каждый друг = ещё +5!",
+                            )
+                        except Exception:
+                            pass
+        except (ValueError, TypeError):
+            pass
 
-            if referrer and referrer.id != message.from_user.id:
-                # Привязываем текущего пользователя к рефереру
-                await repo.set_referred_by(message.from_user.id, referrer.id)
-                # Инкрементируем счётчик рефералов реферера
-                await repo.increment_referral_count(referrer.id)
-                await session.commit()
-
-                # Начисляем бонусные загрузки рефереру через Redis
-                await get_limit_service().add_referral_bonus(referrer.id, amount=5)
-
-                # Уведомляем реферера
-                try:
-                    await bot.send_message(
-                        referrer.id,
-                        f"🎉 По твоей ссылке зашёл новый пользователь!\n"
-                        f"Тебе начислено <b>+5 бонусных загрузок</b> 🚀",
-                    )
-                except Exception:
-                    pass
-
-    await message.answer(gettext("welcome", name=message.from_user.first_name))
-
-    kb = [
-        [InlineKeyboardButton(text=name, callback_data=f"lang_{code}")]
-        for code, name in languages.items()
-    ]
     await message.answer(
-        gettext("choose_language"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
+        gettext("welcome", name=message.from_user.first_name),
+        reply_markup=main_keyboard(),
     )
 
 
-@router.message(Command("set_language"))
-async def cmd_set_language(message: Message, gettext):
-    kb = [
-        [InlineKeyboardButton(text=name, callback_data=f"lang_{code}")]
-        for code, name in languages.items()
-    ]
+@router.message(F.text == "📥 Скачать видео")
+async def btn_download(message: Message, gettext):
     await message.answer(
-        gettext("choose_language"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
+        "🔗 <b>Отправь ссылку на видео</b>\n\n"
+        "Просто вставь ссылку из TikTok, Instagram, Twitter, Reddit и других платформ — скачаю мгновенно ⚡"
     )
 
 
+@router.message(F.text == "👤 Мой профиль")
+async def btn_profile(message: Message, user_db):
+    ls = get_limit_service()
+    used, limit = await ls.get_usage(message.from_user.id)
+    premium_status = "✅ Активен" if user_db.is_premium else "❌ Нет"
+    until = ""
+    if user_db.is_premium and user_db.premium_until:
+        until = f"\n📅 Действует до: <b>{user_db.premium_until.strftime('%d.%m.%Y')}</b>"
+
+    await message.answer(
+        f"👤 <b>Твой профиль</b>\n\n"
+        f"🆔 ID: <code>{message.from_user.id}</code>\n"
+        f"⬇️ Загрузок сегодня: <b>{used}/{limit}</b>\n"
+        f"💎 Premium: {premium_status}{until}\n"
+        f"👥 Приглашено друзей: <b>{user_db.referral_count or 0}</b>"
+    )
+
+
+@router.message(F.text == "🔗 Реферальная ссылка")
+@router.message(Command("referral"))
+async def cmd_referral(message: Message, user_db, bot: Bot):
+    me = await bot.get_me()
+    ref_link = f"https://t.me/{me.username}?start={message.from_user.id}"
+    count = user_db.referral_count or 0
+
+    bonus = 0
+    try:
+        ls = get_limit_service()
+        raw = await ls.redis.get(f"referral_bonus:{message.from_user.id}")
+        bonus = int(raw or 0)
+    except Exception:
+        pass
+
+    share_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="📤 Поделиться ссылкой",
+            url=f"https://t.me/share/url?url={ref_link}&text=Скачивай видео с TikTok, Instagram и других платформ за секунды!"
+        )
+    ]])
+
+    await message.answer(
+        f"🔗 <b>Твоя реферальная ссылка:</b>\n"
+        f"<code>{ref_link}</code>\n\n"
+        f"👥 Приглашено друзей: <b>{count}</b>\n"
+        f"🎁 Бонусных загрузок накоплено: <b>+{bonus}</b>\n\n"
+        f"За каждого приглашённого — <b>+5 загрузок</b> навсегда!\n"
+        f"Чем больше друзей — тем больше видео 🚀",
+        reply_markup=share_kb,
+    )
+
+
+@router.message(F.text == "💎 Premium")
 @router.message(Command("premium"))
 async def cmd_premium(message: Message, gettext, user_db):
     if user_db.is_premium:
@@ -101,33 +144,23 @@ async def cmd_premium(message: Message, gettext, user_db):
         await message.answer(gettext("premium_info"))
 
 
-@router.message(Command("referral"))
-async def cmd_referral(message: Message, user_db, bot: Bot):
-    me = await bot.get_me()
-    code = user_db.referral_code or "—"
-    ref_link = f"https://t.me/{me.username}?start={code}"
-    count = user_db.referral_count or 0
-
-    bonus = 0
-    try:
-        ls = get_limit_service()
-        bonus_key = f"referral_bonus:{message.from_user.id}"
-        raw = await ls.redis.get(bonus_key)
-        bonus = int(raw or 0)
-    except Exception:
-        pass
-
-    text = (
-        f"🔗 <b>Твоя реферальная ссылка:</b>\n"
-        f"<code>{ref_link}</code>\n\n"
-        f"👥 Приглашено друзей: <b>{count}</b>\n"
-        f"🎁 Бонусных загрузок: <b>+{bonus}</b>\n\n"
-        f"За каждого приглашённого друга — <b>+5 загрузок</b> навсегда!\n"
-        f"Чем больше друзей — тем больше видео 🚀"
+@router.message(F.text == "🌍 Язык")
+@router.message(Command("set_language"))
+async def cmd_set_language(message: Message, gettext):
+    kb = []
+    items = list(languages.items())
+    for i in range(0, len(items), 2):
+        row = [InlineKeyboardButton(text=items[i][1], callback_data=f"lang_{items[i][0]}")]
+        if i + 1 < len(items):
+            row.append(InlineKeyboardButton(text=items[i+1][1], callback_data=f"lang_{items[i+1][0]}"))
+        kb.append(row)
+    await message.answer(
+        gettext("choose_language"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
     )
-    await message.answer(text)
 
 
+@router.message(F.text == "📊 Статистика")
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, user_db):
     ls = get_limit_service()
@@ -137,20 +170,24 @@ async def cmd_stats(message: Message, user_db):
     if user_db.is_premium and user_db.premium_until:
         until = f" (до {user_db.premium_until.strftime('%d.%m.%Y')})"
 
-    text = (
+    await message.answer(
         f"📊 <b>Твоя статистика</b>\n\n"
         f"⬇️ Загрузок сегодня: <b>{used}/{limit}</b>\n"
-        f"💎 Премиум: {premium_status}{until}\n"
+        f"💎 Premium: {premium_status}{until}\n"
         f"👥 Рефералов: <b>{user_db.referral_count or 0}</b>"
     )
-    await message.answer(text)
 
 
-# ИСПРАВЛЕНИЕ: фильтр ~F.text.startswith("/") гарантирует, что хендлер
-# не перехватит команды типа /admin_stat, /premium и т.д.
-# Дополнительно: F.text — только текстовые сообщения, без фото/стикеров.
 @router.message(F.text, ~F.text.startswith("/"))
 async def handle_url(message: Message, gettext, user_db):
+    # Игнорируем кнопки клавиатуры
+    keyboard_buttons = {
+        "📥 Скачать видео", "👤 Мой профиль", "🔗 Реферальная ссылка",
+        "💎 Premium", "🌍 Язык", "📊 Статистика",
+    }
+    if message.text.strip() in keyboard_buttons:
+        return
+
     url = message.text.strip()
     platform = detect_platform(url)
 
