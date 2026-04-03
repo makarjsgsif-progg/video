@@ -44,27 +44,25 @@ def _make_async_engine(url: str):
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    # Ключевое исправление: отключаем prepared statements на всех соединениях
-    # statement_cache_size=0 – для asyncpg
-    # server_settings – дополнительные параметры PostgreSQL сессии
+    async_url = _to_asyncpg_url(url)
+    # Добавляем параметр отключения кэша prepared statements в DSN
+    if "prepared_statement_cache_size" not in async_url:
+        separator = "&" if "?" in async_url else "?"
+        async_url += f"{separator}prepared_statement_cache_size=0"
+
     connect_args = {
         "ssl": ssl_ctx,
-        "statement_cache_size": 0,
         "server_settings": {
-            "plan_cache_mode": "force_custom_plan",  # отключает prepared statements
+            "plan_cache_mode": "force_custom_plan",  # отключает планы запросов
         }
     }
 
     return create_async_engine(
-        _to_asyncpg_url(url),
+        async_url,
         echo=False,
         connect_args=connect_args,
-        pool_size=5,
-        max_overflow=10,
-        pool_timeout=30,
-        pool_recycle=1800,
+        poolclass=NullPool,  # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: новое соединение на каждую сессию
         pool_pre_ping=True,
-        pool_reset_on_return="rollback",
     )
 
 
@@ -80,7 +78,7 @@ Base = declarative_base()
 
 
 # ---------------------------------------------------------------------------
-# init_db — psycopg2 (sync) для DDL (не использует prepared statements)
+# init_db — без изменений
 # ---------------------------------------------------------------------------
 async def init_db():
     import asyncio
@@ -105,7 +103,7 @@ async def init_db():
 
 
 # ---------------------------------------------------------------------------
-# Models (без изменений, оставляем как есть)
+# Models (без изменений)
 # ---------------------------------------------------------------------------
 
 class User(Base):
@@ -138,7 +136,7 @@ class Ad(Base):
 
 
 # ---------------------------------------------------------------------------
-# Repositories (без изменений, оставляем как есть)
+# Repositories (без изменений, но для полноты оставлены)
 # ---------------------------------------------------------------------------
 
 class AdRepo:
