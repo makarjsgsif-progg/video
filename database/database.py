@@ -2,10 +2,12 @@ import ssl
 import string
 import random
 from datetime import datetime, timedelta
+from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
     BigInteger, Text, ForeignKey, select, update, delete, func,
+    create_engine,
 )
 from sqlalchemy.ext.asyncio import (
     create_async_engine, AsyncSession, async_sessionmaker,
@@ -16,55 +18,61 @@ from sqlalchemy.pool import NullPool
 from config.config import settings
 
 # ---------------------------------------------------------------------------
-# SSL
+# Helpers
 # ---------------------------------------------------------------------------
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
 
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
 
-def _make_engine(url: str, use_nullpool: bool = False):
+def _to_asyncpg_url(url: str) -> str:
+    """postgresql:// / postgres:// → postgresql+asyncpg://"""
+    url = url.replace("postgres://", "postgresql://", 1)
+    if "postgresql+asyncpg" not in url:
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
+def _to_psycopg2_url(url: str) -> str:
+    """postgresql+asyncpg:// / postgres:// → postgresql+psycopg2://"""
+    url = url.replace("postgres://", "postgresql://", 1)
+    url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    if "postgresql+psycopg2" not in url:
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
+
+# ---------------------------------------------------------------------------
+# Async engine — основной, для всех запросов бота
+# ---------------------------------------------------------------------------
+def _make_async_engine(url: str):
     if not _is_postgres:
         return create_async_engine(url, echo=False)
 
-    # Нормализуем схему
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif not url.startswith("postgresql+asyncpg://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    asyncpg_url = _to_asyncpg_url(url)
 
-    kwargs: dict = {
-        "echo": False,
-        # Единственный правильный способ отключить prepared statements
-        # в SQLAlchemy 2.0 asyncpg диалекте — execution_options на уровне engine.
-        # Это передаётся в asyncpg через диалект без creator-хака.
-        "execution_options": {
-            "asyncpg_prepared_statement_cache_size": 0,
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    return create_async_engine(
+        asyncpg_url,
+        echo=False,
+        # statement_cache_size=0 — ключевой параметр asyncpg.connect(),
+        # отключает prepared statements полностью на уровне драйвера.
+        connect_args={
+            "ssl": ssl_ctx,
+            "statement_cache_size": 0,
         },
-        "connect_args": {
-            "ssl": ssl_context,
-            "statement_cache_size": 0,  # дублируем на уровне asyncpg тоже
-        },
-    }
-
-    if use_nullpool:
-        kwargs["poolclass"] = NullPool
-    else:
-        kwargs.update(
-            pool_size=5,
-            max_overflow=10,
-            pool_timeout=30,
-            pool_recycle=1800,
-            pool_pre_ping=True,
-            pool_reset_on_return="rollback",
-        )
-
-    return create_async_engine(url, **kwargs)
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+        pool_reset_on_return="rollback",
+    )
 
 
-engine = _make_engine(settings.DATABASE_URL)
+engine = _make_async_engine(settings.DATABASE_URL)
 
 async_session_maker = async_sessionmaker(
     engine,
@@ -76,25 +84,33 @@ Base = declarative_base()
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# init_db — использует синхронный psycopg2, чтобы полностью обойти
+# проблему с PgBouncer и prepared statements в asyncpg.
+# psycopg2-binary уже есть в requirements.txt.
 # ---------------------------------------------------------------------------
-
-def _gen_ref_code() -> str:
-    chars = string.ascii_uppercase + string.digits
-    return "".join(random.choices(chars, k=8))
-
-
 async def init_db():
-    if _is_postgres:
-        ddl_engine = _make_engine(settings.DATABASE_URL, use_nullpool=True)
+    import asyncio
+
+    def _create_tables():
+        if _is_postgres:
+            sync_url = _to_psycopg2_url(settings.DATABASE_URL)
+            sync_engine = create_engine(
+                sync_url,
+                connect_args={"sslmode": "require"},
+                poolclass=NullPool,
+            )
+        else:
+            sync_engine = create_engine(settings.DATABASE_URL, poolclass=NullPool)
+
         try:
-            async with ddl_engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
+            with sync_engine.begin() as conn:
+                Base.metadata.create_all(conn)
         finally:
-            await ddl_engine.dispose()
-    else:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            sync_engine.dispose()
+
+    # Запускаем синхронную DDL операцию в отдельном потоке,
+    # чтобы не блокировать event loop
+    await asyncio.to_thread(_create_tables)
 
 
 # ---------------------------------------------------------------------------
@@ -287,3 +303,8 @@ class UserRepo:
     async def get_all_user_ids(self) -> list[int]:
         result = await self.session.execute(select(User.id))
         return result.scalars().all()
+
+
+def _gen_ref_code() -> str:
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=8))
