@@ -3,7 +3,6 @@ import string
 import random
 from datetime import datetime, timedelta
 
-import asyncpg
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
     BigInteger, Text, ForeignKey, select, update, delete, func,
@@ -26,45 +25,43 @@ ssl_context.verify_mode = ssl.CERT_NONE
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
 
-# ---------------------------------------------------------------------------
-# Фабрика engine с asyncpg creator — единственный способ надёжно передать
-# statement_cache_size=0 при работе через PgBouncer в transaction mode.
-# connect_args в create_async_engine для asyncpg диалекта НЕ передаёт
-# statement_cache_size напрямую в asyncpg.connect(), поэтому используем creator.
-# ---------------------------------------------------------------------------
 def _make_engine(url: str, use_nullpool: bool = False):
-    if _is_postgres:
-        # asyncpg принимает postgresql://, а не postgresql+asyncpg://
-        asyncpg_url = (
-            url
-            .replace("postgresql+asyncpg://", "postgresql://")
-            .replace("postgres://", "postgresql://")
+    if not _is_postgres:
+        return create_async_engine(url, echo=False)
+
+    # Нормализуем схему
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif not url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    kwargs: dict = {
+        "echo": False,
+        # Единственный правильный способ отключить prepared statements
+        # в SQLAlchemy 2.0 asyncpg диалекте — execution_options на уровне engine.
+        # Это передаётся в asyncpg через диалект без creator-хака.
+        "execution_options": {
+            "asyncpg_prepared_statement_cache_size": 0,
+        },
+        "connect_args": {
+            "ssl": ssl_context,
+            "statement_cache_size": 0,  # дублируем на уровне asyncpg тоже
+        },
+    }
+
+    if use_nullpool:
+        kwargs["poolclass"] = NullPool
+    else:
+        kwargs.update(
+            pool_size=5,
+            max_overflow=10,
+            pool_timeout=30,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+            pool_reset_on_return="rollback",
         )
 
-        async def _connect():
-            return await asyncpg.connect(
-                asyncpg_url,
-                ssl=ssl_context,
-                statement_cache_size=0,  # ← отключает prepared statements полностью
-            )
-
-        kwargs: dict = {"echo": False, "creator": _connect}
-        if use_nullpool:
-            kwargs["poolclass"] = NullPool
-        else:
-            kwargs.update(
-                pool_size=5,
-                max_overflow=10,
-                pool_timeout=30,
-                pool_recycle=1800,
-                pool_pre_ping=True,
-                pool_reset_on_return="rollback",
-            )
-
-        # URL фиктивный — реальное соединение создаёт creator
-        return create_async_engine("postgresql+asyncpg://", **kwargs)
-    else:
-        return create_async_engine(url, echo=False)
+    return create_async_engine(url, **kwargs)
 
 
 engine = _make_engine(settings.DATABASE_URL)
