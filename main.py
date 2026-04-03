@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import signal
+from aiohttp import web
 
 from aiogram.exceptions import TelegramConflictError
 
@@ -10,6 +12,25 @@ from bot.worker import Worker
 from database.database import init_db
 
 logger = logging.getLogger(__name__)
+
+# Render требует открытый порт для Web Service
+PORT = int(os.environ.get("PORT", 10000))
+
+
+async def health_check(request):
+    return web.Response(text="OK")
+
+
+async def start_health_server():
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    logger.info(f"Health check server started on port {PORT}")
+    return runner
 
 
 async def main():
@@ -24,10 +45,10 @@ async def main():
     worker = Worker()
     worker_task = asyncio.create_task(worker.run())
 
-    # Graceful shutdown — важно на Render.com при деплое
-    # Render посылает SIGTERM перед остановкой контейнера
-    loop = asyncio.get_running_loop()
+    # Запускаем HTTP-сервер чтобы Render не убивал процесс
+    health_runner = await start_health_server()
 
+    loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
     def _handle_signal():
@@ -38,8 +59,6 @@ async def main():
         loop.add_signal_handler(sig, _handle_signal)
 
     try:
-        # drop_pending_updates=True — отбрасываем накопившиеся апдейты при рестарте,
-        # это устраняет TelegramConflictError при rolling-деплое на Render
         polling_task = asyncio.create_task(
             dp.start_polling(
                 bot,
@@ -48,7 +67,6 @@ async def main():
             )
         )
 
-        # Ждём сигнала остановки
         await stop_event.wait()
 
     except TelegramConflictError:
@@ -69,6 +87,9 @@ async def main():
             await worker_task
         except asyncio.CancelledError:
             pass
+
+        logger.info("Stopping health server...")
+        await health_runner.cleanup()
 
         logger.info("Closing bot session...")
         await bot.session.close()
