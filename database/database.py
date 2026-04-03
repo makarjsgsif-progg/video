@@ -217,14 +217,9 @@ class UserRepo:
         return user
 
     async def set_referred_by(self, user_id: int, referrer_id: int):
-        """
-        Явный метод обновления referred_by — убирает костыль с прямым импортом
-        update/User внутри хендлера cmd_start.
-        """
         await self.session.execute(
             update(User).where(User.id == user_id).values(referred_by=referrer_id)
         )
-        # commit намеренно НЕ здесь — вызывающий код делает это сам
 
     async def set_language(self, user_id: int, language: str):
         await self.session.execute(
@@ -267,7 +262,6 @@ class UserRepo:
             .where(User.id == referrer_id)
             .values(referral_count=User.referral_count + 1)
         )
-        # commit намеренно НЕ здесь
 
     async def get_all_users_count(self) -> int:
         result = await self.session.execute(select(func.count(User.id)))

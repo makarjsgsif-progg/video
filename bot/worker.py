@@ -35,15 +35,14 @@ class Worker:
         self.downloader = Downloader()
         self.ad_service = AdService()
         self.limit_service = LimitService()
-        self.semaphore = asyncio.Semaphore(max_concurrent_tasks)
+        self.max_concurrent_tasks = max_concurrent_tasks
         self._active_tasks: set[asyncio.Task] = set()
 
     async def process_task(self, task: dict):
-        async with self.semaphore:
-            try:
-                await self._execute_download_logic(task)
-            except Exception as e:
-                logger.exception(f"Unhandled error in process_task: {e}")
+        try:
+            await self._execute_download_logic(task)
+        except Exception as e:
+            logger.exception(f"Unhandled error in process_task: {e}")
 
     async def _execute_download_logic(self, task: dict):
         user_id = task["user_id"]
@@ -202,17 +201,16 @@ class Worker:
         """
         Главный цикл воркера.
 
-        Исправление: вместо бесконечного create_task (что приводило к взрыву
-        числа корутин при большой очереди), теперь соблюдаем лимит семафора —
-        не берём новый таск, пока все слоты заняты.
+        Исправление: теперь не создаётся больше задач, чем max_concurrent_tasks.
+        Если все слоты заняты, воркер ждёт, пока освободится место, и только
+        потом забирает новую задачу из Redis. Это предотвращает накопление
+        тысяч висящих корутин.
         """
         logger.info("🚀 Worker started")
         while True:
             try:
-                # Ждём, пока освободится хотя бы один слот семафора,
-                # прежде чем тянуть задачу из Redis.
-                # Это предотвращает накопление тысяч висящих корутин.
-                if self.semaphore._value == 0:
+                # Не берём новую задачу, если уже запущено максимальное количество
+                if len(self._active_tasks) >= self.max_concurrent_tasks:
                     await asyncio.sleep(0.1)
                     continue
 
