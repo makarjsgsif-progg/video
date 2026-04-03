@@ -47,10 +47,7 @@ class Downloader:
 
 class LimitService:
     def __init__(self):
-        if settings.REDIS_URL.startswith("rediss://") or "upstash.io" in settings.REDIS_URL:
-            self.redis = redis.from_url(settings.REDIS_URL, ssl=True, decode_responses=True)
-        else:
-            self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
     async def check_and_increment(self, user_id: int, is_premium: bool) -> bool:
         if is_premium:
@@ -68,10 +65,7 @@ class LimitService:
 
 class QueueService:
     def __init__(self):
-        if settings.REDIS_URL.startswith("rediss://") or "upstash.io" in settings.REDIS_URL:
-            self.redis = redis.from_url(settings.REDIS_URL, ssl=True, decode_responses=True)
-        else:
-            self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
         self.queue_key = "download_queue"
 
     async def push_task(self, user_id: int, url: str, platform: str):
