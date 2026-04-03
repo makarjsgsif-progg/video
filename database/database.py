@@ -9,6 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.pool import NullPool
 
 from config.config import settings
 
@@ -22,18 +23,20 @@ ssl_context.verify_mode = ssl.CERT_NONE
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
 # ---------------------------------------------------------------------------
-# connect_args с отключёнными prepared statements для PgBouncer
+# connect_args — отключаем prepared statements для PgBouncer (transaction mode)
+# statement_cache_size=0 отключает кеш на уровне asyncpg
+# prepared_statement_cache_size=0 — дополнительный параметр SQLAlchemy asyncpg диалекта
 # ---------------------------------------------------------------------------
 _connect_args: dict = {}
 if _is_postgres:
     _connect_args = {
         "ssl": ssl_context,
-        "prepared_statement_cache_size": 0,
         "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
     }
 
 # ---------------------------------------------------------------------------
-# Основной engine — используется для всех операций
+# Основной engine
 # ---------------------------------------------------------------------------
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -75,14 +78,11 @@ async def init_db():
     """
     Создаёт таблицы если их нет.
 
-    Для Supabase/PgBouncer используем отдельный engine напрямую (порт 5432),
+    Для Supabase/PgBouncer используем NullPool (одно прямое соединение),
     чтобы DDL-команды не шли через пулер в transaction mode.
-    Если DATABASE_URL уже указывает на прямое соединение — используем его.
+    statement_cache_size=0 обязателен и здесь — даже для DDL.
     """
     if _is_postgres:
-        # Для DDL нужно прямое соединение без пулера.
-        # Пробуем создать временный engine с NullPool (без пула, одно соединение).
-        from sqlalchemy.pool import NullPool
         ddl_engine = create_async_engine(
             settings.DATABASE_URL,
             echo=False,
