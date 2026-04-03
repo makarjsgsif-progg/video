@@ -4,13 +4,8 @@ from typing import Optional, Dict, Final
 
 
 class Platform(str, Enum):
-    """
-    Использование Enum делает код типизированным.
-    Теперь ты не ошибешься в написании "tik_tok" vs "tiktok".
-    """
     TIKTOK = "tiktok"
     INSTAGRAM = "instagram"
-    YOUTUBE = "youtube"
     TWITTER = "twitter"
     REDDIT = "reddit"
     FACEBOOK = "facebook"
@@ -23,12 +18,9 @@ class Platform(str, Enum):
     MS_STREAM = "microsoftstream"
 
 
-# Компилируем паттерны заранее.
-# Это ускоряет работу, так как Python не нужно пересобирать регулярку при каждом вызове.
 PLATFORM_PATTERNS: Final[Dict[Platform, re.Pattern]] = {
     Platform.TIKTOK: re.compile(r"tiktok\.com|vm\.tiktok\.com", re.I),
     Platform.INSTAGRAM: re.compile(r"instagram\.com|instagr\.am|reels", re.I),
-    Platform.YOUTUBE: re.compile(r"youtube\.com|youtu\.be|shorts", re.I),
     Platform.TWITTER: re.compile(r"twitter\.com|x\.com", re.I),
     Platform.REDDIT: re.compile(r"reddit\.com", re.I),
     Platform.FACEBOOK: re.compile(r"facebook\.com|fb\.watch", re.I),
@@ -43,16 +35,9 @@ PLATFORM_PATTERNS: Final[Dict[Platform, re.Pattern]] = {
 
 
 def detect_platform(url: Optional[str]) -> Optional[Platform]:
-    """
-    Определяет платформу по URL.
-
-    :param url: Ссылка на видео/пост
-    :return: Член Enum Platform или None, если совпадений нет
-    """
     if not url or not isinstance(url, str):
         return None
 
-    # strip() уберет лишние пробелы, которые часто копируются вместе со ссылкой
     clean_url = url.strip()
 
     for platform, pattern in PLATFORM_PATTERNS.items():
@@ -60,7 +45,3 @@ def detect_platform(url: Optional[str]) -> Optional[Platform]:
             return platform
 
     return None
-
-# Пример использования:
-# if detect_platform(url) == Platform.YOUTUBE:
-#     ...

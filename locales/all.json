@@ -1,9 +1,9 @@
 {
     "en": {
-        "welcome": "👋 Hey <b>{name}</b>!\n\nDrop me any video link and I'll download it in seconds ⚡\n\n<b>Supported:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat and more!\n\n📲 Share me with friends → /referral",
+        "welcome": "👋 Hey <b>{name}</b>!\n\nDrop me any video link and I'll download it in seconds ⚡\n\n<b>Supported:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat and more!\n\n📲 Share me with friends → /referral",
         "choose_language": "🌍 Choose your language:",
         "language_set": "✅ Language updated!",
-        "unsupported_url": "🤔 <b>Link not supported</b>\n\nI work with TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch and more.\n\nJust paste the link from the app and I'll handle the rest!",
+        "unsupported_url": "🤔 <b>Link not supported</b>\n\nI work with TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch and more.\n\nJust paste the link from the app and I'll handle the rest!",
         "processing": "⚡ <b>Downloading...</b>\n\nGrabbing your video, hang tight!",
         "banned": "🚫 You have been banned from this bot.",
         "daily_limit_reached": "⏳ <b>Daily limit reached</b>\n\nYou've used all your free downloads for today.\n\n💎 Get <b>Premium</b> for unlimited downloads\n👥 Or invite friends → /referral (+5 downloads per friend!)",
@@ -11,10 +11,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ Unlimited downloads\n✅ No ads\n✅ Priority processing\n\nContact admin to unlock Premium!"
     },
     "ru": {
-        "welcome": "👋 Привет, <b>{name}</b>!\n\nОтправь ссылку на видео — скачаю за секунды ⚡\n\n<b>Поддерживаю:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat и другие!\n\n📲 Поделись с друзьями → /referral",
+        "welcome": "👋 Привет, <b>{name}</b>!\n\nОтправь ссылку на видео — скачаю за секунды ⚡\n\n<b>Поддерживаю:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat и другие!\n\n📲 Поделись с друзьями → /referral",
         "choose_language": "🌍 Выбери язык:",
         "language_set": "✅ Язык обновлён!",
-        "unsupported_url": "🤔 <b>Ссылка не поддерживается</b>\n\nЯ работаю с TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch и другими платформами.\n\nПросто вставь ссылку из приложения — остальное за мной!",
+        "unsupported_url": "🤔 <b>Ссылка не поддерживается</b>\n\nЯ работаю с TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch и другими платформами.\n\nПросто вставь ссылку из приложения — остальное за мной!",
         "processing": "⚡ <b>Скачиваю...</b>\n\nЗабираю видео, секундочку!",
         "banned": "🚫 Тебе заблокирован доступ к этому боту.",
         "daily_limit_reached": "⏳ <b>Дневной лимит исчерпан</b>\n\nТы использовал все бесплатные загрузки на сегодня.\n\n💎 Купи <b>Premium</b> — безлимитные загрузки\n👥 Или пригласи друзей → /referral (+5 загрузок за каждого!)",
@@ -22,10 +22,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ Безлимитные загрузки\n✅ Без рекламы\n✅ Приоритетная обработка\n\nСвяжись с администратором для подключения!"
     },
     "es": {
-        "welcome": "👋 ¡Hola <b>{name}</b>!\n\nEnvíame un enlace de vídeo y lo descargo en segundos ⚡\n\n<b>Compatible con:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch y más!\n\n📲 Comparte con amigos → /referral",
+        "welcome": "👋 ¡Hola <b>{name}</b>!\n\nEnvíame un enlace de vídeo y lo descargo en segundos ⚡\n\n<b>Compatible con:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch y más!\n\n📲 Comparte con amigos → /referral",
         "choose_language": "🌍 Elige tu idioma:",
         "language_set": "✅ ¡Idioma actualizado!",
-        "unsupported_url": "🤔 <b>Enlace no compatible</b>\n\nFunciono con TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch y más.\n\n¡Solo pega el enlace y me encargo del resto!",
+        "unsupported_url": "🤔 <b>Enlace no compatible</b>\n\nFunciono con TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch y más.\n\n¡Solo pega el enlace y me encargo del resto!",
         "processing": "⚡ <b>Descargando...</b>\n\n¡Cogiendo tu vídeo, espera un momento!",
         "banned": "🚫 Has sido bloqueado de este bot.",
         "daily_limit_reached": "⏳ <b>Límite diario alcanzado</b>\n\nHas usado todas las descargas gratuitas de hoy.\n\n💎 Consigue <b>Premium</b> — descargas ilimitadas\n👥 O invita amigos → /referral (+5 descargas por amigo!)",
@@ -33,10 +33,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ Descargas ilimitadas\n✅ Sin anuncios\n✅ Procesamiento prioritario\n\n¡Contacta al administrador para activarlo!"
     },
     "pt": {
-        "welcome": "👋 Olá <b>{name}</b>!\n\nEnvie um link de vídeo e baixo em segundos ⚡\n\n<b>Suportado:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch e mais!\n\n📲 Compartilhe com amigos → /referral",
+        "welcome": "👋 Olá <b>{name}</b>!\n\nEnvie um link de vídeo e baixo em segundos ⚡\n\n<b>Suportado:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch e mais!\n\n📲 Compartilhe com amigos → /referral",
         "choose_language": "🌍 Escolha seu idioma:",
         "language_set": "✅ Idioma atualizado!",
-        "unsupported_url": "🤔 <b>Link não suportado</b>\n\nFunciono com TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch e mais.\n\nCole o link e cuido do resto!",
+        "unsupported_url": "🤔 <b>Link não suportado</b>\n\nFunciono com TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch e mais.\n\nCole o link e cuido do resto!",
         "processing": "⚡ <b>Baixando...</b>\n\nBuscando seu vídeo, aguarde!",
         "banned": "🚫 Você foi banido deste bot.",
         "daily_limit_reached": "⏳ <b>Limite diário atingido</b>\n\nVocê usou todos os downloads gratuitos de hoje.\n\n💎 Obtenha <b>Premium</b> — downloads ilimitados\n👥 Ou convide amigos → /referral (+5 downloads por amigo!)",
@@ -44,10 +44,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ Downloads ilimitados\n✅ Sem anúncios\n✅ Processamento prioritário\n\nContate o administrador para ativar!"
     },
     "de": {
-        "welcome": "👋 Hey <b>{name}</b>!\n\nSchick mir einen Video-Link und ich lade ihn in Sekunden herunter ⚡\n\n<b>Unterstützt:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch und mehr!\n\n📲 Mit Freunden teilen → /referral",
+        "welcome": "👋 Hey <b>{name}</b>!\n\nSchick mir einen Video-Link und ich lade ihn in Sekunden herunter ⚡\n\n<b>Unterstützt:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch und mehr!\n\n📲 Mit Freunden teilen → /referral",
         "choose_language": "🌍 Wähle deine Sprache:",
         "language_set": "✅ Sprache aktualisiert!",
-        "unsupported_url": "🤔 <b>Link nicht unterstützt</b>\n\nIch unterstütze TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch und mehr.\n\nFüge einfach den Link ein!",
+        "unsupported_url": "🤔 <b>Link nicht unterstützt</b>\n\nIch unterstütze TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch und mehr.\n\nFüge einfach den Link ein!",
         "processing": "⚡ <b>Wird heruntergeladen...</b>\n\nHol dein Video, einen Moment!",
         "banned": "🚫 Du wurdest von diesem Bot gesperrt.",
         "daily_limit_reached": "⏳ <b>Tageslimit erreicht</b>\n\nDu hast alle kostenlosen Downloads für heute verwendet.\n\n💎 Hol dir <b>Premium</b> — unbegrenzte Downloads\n👥 Oder lade Freunde ein → /referral (+5 Downloads pro Freund!)",
@@ -55,10 +55,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ Unbegrenzte Downloads\n✅ Keine Werbung\n✅ Prioritätsverarbeitung\n\nKontaktiere den Admin zum Aktivieren!"
     },
     "fr": {
-        "welcome": "👋 Salut <b>{name}</b>!\n\nEnvoie-moi un lien vidéo et je le télécharge en quelques secondes ⚡\n\n<b>Compatible avec:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch et plus!\n\n📲 Partage avec tes amis → /referral",
+        "welcome": "👋 Salut <b>{name}</b>!\n\nEnvoie-moi un lien vidéo et je le télécharge en quelques secondes ⚡\n\n<b>Compatible avec:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch et plus!\n\n📲 Partage avec tes amis → /referral",
         "choose_language": "🌍 Choisissez votre langue:",
         "language_set": "✅ Langue mise à jour!",
-        "unsupported_url": "🤔 <b>Lien non supporté</b>\n\nJe supporte TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch et plus.\n\nColle juste le lien!",
+        "unsupported_url": "🤔 <b>Lien non supporté</b>\n\nJe supporte TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch et plus.\n\nColle juste le lien!",
         "processing": "⚡ <b>Téléchargement...</b>\n\nJe récupère ta vidéo, patiente!",
         "banned": "🚫 Tu as été banni de ce bot.",
         "daily_limit_reached": "⏳ <b>Limite quotidienne atteinte</b>\n\nTu as utilisé tous tes téléchargements gratuits d'aujourd'hui.\n\n💎 Obtiens <b>Premium</b> — téléchargements illimités\n👥 Ou invite des amis → /referral (+5 par ami!)",
@@ -66,10 +66,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ Téléchargements illimités\n✅ Sans publicité\n✅ Traitement prioritaire\n\nContacte l'admin pour activer!"
     },
     "hi": {
-        "welcome": "👋 नमस्ते <b>{name}</b>!\n\nकोई भी वीडियो लिंक भेजें — सेकंडों में डाउनलोड करूँगा ⚡\n\n<b>सपोर्टेड:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch और बहुत कुछ!\n\n📲 दोस्तों के साथ शेयर करें → /referral",
+        "welcome": "👋 नमस्ते <b>{name}</b>!\n\nकोई भी वीडियो लिंक भेजें — सेकंडों में डाउनलोड करूँगा ⚡\n\n<b>सपोर्टेड:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch और बहुत कुछ!\n\n📲 दोस्तों के साथ शेयर करें → /referral",
         "choose_language": "🌍 अपनी भाषा चुनें:",
         "language_set": "✅ भाषा अपडेट की गई!",
-        "unsupported_url": "🤔 <b>लिंक सपोर्टेड नहीं है</b>\n\nमैं TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch और अन्य के साथ काम करता हूँ।\n\nबस लिंक पेस्ट करें!",
+        "unsupported_url": "🤔 <b>लिंक सपोर्टेड नहीं है</b>\n\nमैं TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch और अन्य के साथ काम करता हूँ।\n\nबस लिंक पेस्ट करें!",
         "processing": "⚡ <b>डाउनलोड हो रहा है...</b>\n\nआपका वीडियो ला रहा हूँ, थोड़ा इंतजार करें!",
         "banned": "🚫 आपको इस बॉट से प्रतिबंधित कर दिया गया है।",
         "daily_limit_reached": "⏳ <b>दैनिक सीमा समाप्त</b>\n\nआज के सभी मुफ्त डाउनलोड इस्तेमाल हो गए।\n\n💎 <b>Premium</b> लें — असीमित डाउनलोड\n👥 दोस्तों को आमंत्रित करें → /referral (+5 डाउनलोड प्रति दोस्त!)",
@@ -77,10 +77,10 @@
         "premium_info": "💎 <b>Premium</b>\n\n✅ असीमित डाउनलोड\n✅ कोई विज्ञापन नहीं\n✅ प्राथमिकता प्रसंस्करण\n\nसक्रिय करने के लिए एडमिन से संपर्क करें!"
     },
     "ar": {
-        "welcome": "👋 مرحباً <b>{name}</b>!\n\nأرسل لي رابط فيديو وسأحمّله في ثوانٍ ⚡\n\n<b>يدعم:</b> TikTok · Instagram · YouTube · Twitter · Reddit · Facebook · Vimeo · Twitch والمزيد!\n\n📲 شارك مع أصدقائك → /referral",
+        "welcome": "👋 مرحباً <b>{name}</b>!\n\nأرسل لي رابط فيديو وسأحمّله في ثوانٍ ⚡\n\n<b>يدعم:</b> TikTok · Instagram · Twitter · Reddit · Facebook · Vimeo · Twitch والمزيد!\n\n📲 شارك مع أصدقائك → /referral",
         "choose_language": "🌍 اختر لغتك:",
         "language_set": "✅ تم تحديث اللغة!",
-        "unsupported_url": "🤔 <b>رابط غير مدعوم</b>\n\nأعمل مع TikTok, Instagram Reels, YouTube Shorts, Twitter/X, Reddit, Facebook, Vimeo, Twitch والمزيد.\n\nفقط الصق الرابط!",
+        "unsupported_url": "🤔 <b>رابط غير مدعوم</b>\n\nأعمل مع TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch والمزيد.\n\nفقط الصق الرابط!",
         "processing": "⚡ <b>جارٍ التحميل...</b>\n\nآخذ الفيديو الخاص بك، انتظر لحظة!",
         "banned": "🚫 لقد تم حظرك من هذا البوت.",
         "daily_limit_reached": "⏳ <b>تم الوصول للحد اليومي</b>\n\nاستخدمت جميع التحميلات المجانية اليوم.\n\n💎 احصل على <b>Premium</b> — تحميلات غير محدودة\n👥 أو ادعُ أصدقاء → /referral (+5 تحميلات لكل صديق!)",
