@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
-    BigInteger, Text, ForeignKey, select, update, delete, func,
+    BigInteger, Text, ForeignKey, select, update, delete, func, text,
 )
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
@@ -19,44 +19,34 @@ ssl_context = ssl.create_default_context()
 ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
 
-# ---------------------------------------------------------------------------
-# Engine
-#
-# PgBouncer в transaction-режиме не поддерживает prepared statements.
-# Параметры prepared_statement_cache_size=0 и statement_cache_size=0 отключают
-# их в asyncpg, что устраняет ошибки типа
-# «prepared statement "..." already exists».
-#
-# pool_pre_ping=True — проверяет соединение перед выдачей из пула,
-# исключает ошибки на «протухших» коннектах после простоя.
-#
-# pool_reset_on_return='rollback' — откатывает незакрытые транзакции при
-# возврате коннекта в пул (важно при исключениях внутри хендлеров).
-# ---------------------------------------------------------------------------
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
+# ---------------------------------------------------------------------------
+# connect_args с отключёнными prepared statements для PgBouncer
+# ---------------------------------------------------------------------------
 _connect_args: dict = {}
 if _is_postgres:
     _connect_args = {
         "ssl": ssl_context,
-        # Критично для PgBouncer transaction mode:
         "prepared_statement_cache_size": 0,
         "statement_cache_size": 0,
     }
 
+# ---------------------------------------------------------------------------
+# Основной engine — используется для всех операций
+# ---------------------------------------------------------------------------
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     connect_args=_connect_args,
     pool_pre_ping=True,
     pool_reset_on_return="rollback",
-    # Для SQLite не нужен пул потоков — оставим дефолт
     **(
         {
-            "pool_size": 10,
-            "max_overflow": 20,
+            "pool_size": 5,
+            "max_overflow": 10,
             "pool_timeout": 30,
-            "pool_recycle": 1800,  # пересоздаём коннект раз в 30 минут
+            "pool_recycle": 1800,
         }
         if _is_postgres
         else {}
@@ -82,8 +72,31 @@ def _gen_ref_code() -> str:
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """
+    Создаёт таблицы если их нет.
+
+    Для Supabase/PgBouncer используем отдельный engine напрямую (порт 5432),
+    чтобы DDL-команды не шли через пулер в transaction mode.
+    Если DATABASE_URL уже указывает на прямое соединение — используем его.
+    """
+    if _is_postgres:
+        # Для DDL нужно прямое соединение без пулера.
+        # Пробуем создать временный engine с NullPool (без пула, одно соединение).
+        from sqlalchemy.pool import NullPool
+        ddl_engine = create_async_engine(
+            settings.DATABASE_URL,
+            echo=False,
+            connect_args=_connect_args,
+            poolclass=NullPool,
+        )
+        try:
+            async with ddl_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        finally:
+            await ddl_engine.dispose()
+    else:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +113,6 @@ class User(Base):
     is_banned = Column(Boolean, default=False)
     registered_at = Column(DateTime, server_default=func.now())
 
-    # Реферальная система
     referral_code = Column(String(16), unique=True, nullable=True)
     referred_by = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     referral_count = Column(Integer, default=0)
@@ -162,7 +174,6 @@ class DownloadRepo:
         self.session = session
 
     async def add_download(self, user_id: int, platform: str):
-        """Не делает commit — управление транзакцией на стороне вызывающего кода."""
         download = Download(user_id=user_id, platform=platform)
         self.session.add(download)
 
@@ -199,7 +210,6 @@ class UserRepo:
         self, user_id: int, language: str = "en", referred_by: int | None = None
     ) -> User:
         code = _gen_ref_code()
-        # Гарантируем уникальность реферального кода
         while True:
             existing = await self.get_user_by_referral_code(code)
             if not existing:
