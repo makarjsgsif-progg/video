@@ -2,8 +2,8 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.filters import Command, CommandStart
 
-from database.database import async_session_maker, UserRepo
-from services.services import QueueService, LimitService, generate_referral_code
+from database.database import async_session_maker, UserRepo, User
+from services.services import QueueService, LimitService
 from utils.platform_detector import detect_platform
 from utils.i18n import languages
 
@@ -30,45 +30,46 @@ def get_limit_service() -> LimitService:
 @router.message(CommandStart())
 async def cmd_start(message: Message, gettext, user_db, bot: Bot):
     """
-    /start — обычный старт
+    /start         — обычный старт
     /start REF_CODE — старт с реферальным кодом
     """
     args = message.text.split(maxsplit=1)
     ref_code = args[1].strip() if len(args) > 1 else None
 
-    # Обрабатываем реферала
-    if ref_code and user_db.referred_by is None and ref_code != user_db.referral_code:
+    # Обрабатываем реферала:
+    # - пользователь ещё не был привязан к рефереру
+    # - переданный код не является его собственным
+    if (
+        ref_code
+        and user_db.referred_by is None
+        and ref_code != user_db.referral_code
+    ):
         async with async_session_maker() as session:
             repo = UserRepo(session)
             referrer = await repo.get_user_by_referral_code(ref_code)
 
             if referrer and referrer.id != message.from_user.id:
-                # Используем правильный метод обновления через репозиторий
-                from sqlalchemy import update
-                from database.database import User
-
-                await session.execute(
-                    update(User).where(User.id == message.from_user.id).values(referred_by=referrer.id)
-                )
+                # Привязываем текущего пользователя к рефереру
+                await repo.set_referred_by(message.from_user.id, referrer.id)
+                # Инкрементируем счётчик рефералов реферера
                 await repo.increment_referral_count(referrer.id)
                 await session.commit()
 
-                # Начисляем бонус
+                # Начисляем бонусные загрузки рефереру через Redis
                 await get_limit_service().add_referral_bonus(referrer.id, amount=5)
 
+                # Уведомляем реферера
                 try:
                     await bot.send_message(
                         referrer.id,
                         f"🎉 По твоей ссылке зашёл новый пользователь!\n"
-                        f"Тебе начислено <b>+5 бонусных загрузок</b> 🚀"
+                        f"Тебе начислено <b>+5 бонусных загрузок</b> 🚀",
                     )
                 except Exception:
                     pass
 
-    # Отправляем приветствие
     await message.answer(gettext("welcome", name=message.from_user.first_name))
 
-    # Клавиатура выбора языка
     kb = [
         [InlineKeyboardButton(text=name, callback_data=f"lang_{code}")]
         for code, name in languages.items()
@@ -102,13 +103,11 @@ async def cmd_premium(message: Message, gettext, user_db):
 
 @router.message(Command("referral"))
 async def cmd_referral(message: Message, user_db, bot: Bot):
-    """Показывает реферальную ссылку и статистику."""
     me = await bot.get_me()
     code = user_db.referral_code or "—"
     ref_link = f"https://t.me/{me.username}?start={code}"
     count = user_db.referral_count or 0
 
-    # Узнаём бонус из Redis
     bonus = 0
     try:
         ls = get_limit_service()
@@ -131,7 +130,6 @@ async def cmd_referral(message: Message, user_db, bot: Bot):
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, user_db):
-    """Личная статистика пользователя."""
     ls = get_limit_service()
     used, limit = await ls.get_usage(message.from_user.id)
     premium_status = "✅ Активен" if user_db.is_premium else "❌ Нет"
@@ -148,6 +146,9 @@ async def cmd_stats(message: Message, user_db):
     await message.answer(text)
 
 
+# ИСПРАВЛЕНИЕ: фильтр ~F.text.startswith("/") гарантирует, что хендлер
+# не перехватит команды типа /admin_stat, /premium и т.д.
+# Дополнительно: F.text — только текстовые сообщения, без фото/стикеров.
 @router.message(F.text, ~F.text.startswith("/"))
 async def handle_url(message: Message, gettext, user_db):
     url = message.text.strip()
@@ -161,5 +162,5 @@ async def handle_url(message: Message, gettext, user_db):
         await message.answer(gettext("banned"))
         return
 
-    await get_queue_service().push_task(message.from_user.id, url, platform)
+    await get_queue_service().push_task(message.from_user.id, url, str(platform))
     await message.answer(gettext("processing"))

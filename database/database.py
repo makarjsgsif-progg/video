@@ -5,23 +5,41 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
-    BigInteger, Text, ForeignKey, select, update, delete, func
+    BigInteger, Text, ForeignKey, select, update, delete, func,
 )
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
 from config.config import settings
 
-# --- SSL для Supabase/PostgreSQL ---
+# ---------------------------------------------------------------------------
+# SSL — нужен для Supabase / любого managed PostgreSQL
+# ---------------------------------------------------------------------------
 ssl_context = ssl.create_default_context()
 ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
 
-# === Engine & Session ===
-_connect_args = {}
-if "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL:
+# ---------------------------------------------------------------------------
+# Engine
+#
+# PgBouncer в transaction-режиме не поддерживает prepared statements.
+# Параметры prepared_statement_cache_size=0 и statement_cache_size=0 отключают
+# их в asyncpg, что устраняет ошибки типа
+# «prepared statement "..." already exists».
+#
+# pool_pre_ping=True — проверяет соединение перед выдачей из пула,
+# исключает ошибки на «протухших» коннектах после простоя.
+#
+# pool_reset_on_return='rollback' — откатывает незакрытые транзакции при
+# возврате коннекта в пул (важно при исключениях внутри хендлеров).
+# ---------------------------------------------------------------------------
+_is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
+
+_connect_args: dict = {}
+if _is_postgres:
     _connect_args = {
         "ssl": ssl_context,
+        # Критично для PgBouncer transaction mode:
         "prepared_statement_cache_size": 0,
         "statement_cache_size": 0,
     }
@@ -29,18 +47,34 @@ if "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL:
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    connect_args={
-        "ssl": ssl_context,
-        "prepared_statement_cache_size": 0,
-        "statement_cache_size": 0,
-    },
+    connect_args=_connect_args,
     pool_pre_ping=True,
-    pool_reset_on_return='rollback',
+    pool_reset_on_return="rollback",
+    # Для SQLite не нужен пул потоков — оставим дефолт
+    **(
+        {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_timeout": 30,
+            "pool_recycle": 1800,  # пересоздаём коннект раз в 30 минут
+        }
+        if _is_postgres
+        else {}
+    ),
 )
-async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+async_session_maker = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 Base = declarative_base()
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _gen_ref_code() -> str:
     chars = string.ascii_uppercase + string.digits
@@ -52,7 +86,9 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
-# === Models ===
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
 
 class User(Base):
     __tablename__ = "users"
@@ -88,7 +124,9 @@ class Ad(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
-# === Repositories ===
+# ---------------------------------------------------------------------------
+# Repositories
+# ---------------------------------------------------------------------------
 
 class AdRepo:
     def __init__(self, session: AsyncSession):
@@ -124,9 +162,9 @@ class DownloadRepo:
         self.session = session
 
     async def add_download(self, user_id: int, platform: str):
+        """Не делает commit — управление транзакцией на стороне вызывающего кода."""
         download = Download(user_id=user_id, platform=platform)
         self.session.add(download)
-        # Не делаем commit здесь — пусть вызывающий код управляет транзакцией
 
     async def get_total_downloads(self) -> int:
         result = await self.session.execute(select(func.count(Download.id)))
@@ -157,9 +195,11 @@ class UserRepo:
         )
         return result.scalar_one_or_none()
 
-    async def create_user(self, user_id: int, language: str = "en", referred_by: int | None = None) -> User:
+    async def create_user(
+        self, user_id: int, language: str = "en", referred_by: int | None = None
+    ) -> User:
         code = _gen_ref_code()
-        # Гарантируем уникальность кода
+        # Гарантируем уникальность реферального кода
         while True:
             existing = await self.get_user_by_referral_code(code)
             if not existing:
@@ -176,6 +216,16 @@ class UserRepo:
         await self.session.commit()
         return user
 
+    async def set_referred_by(self, user_id: int, referrer_id: int):
+        """
+        Явный метод обновления referred_by — убирает костыль с прямым импортом
+        update/User внутри хендлера cmd_start.
+        """
+        await self.session.execute(
+            update(User).where(User.id == user_id).values(referred_by=referrer_id)
+        )
+        # commit намеренно НЕ здесь — вызывающий код делает это сам
+
     async def set_language(self, user_id: int, language: str):
         await self.session.execute(
             update(User).where(User.id == user_id).values(language=language)
@@ -185,13 +235,17 @@ class UserRepo:
     async def set_premium(self, user_id: int, days: int):
         until = datetime.now() + timedelta(days=days)
         await self.session.execute(
-            update(User).where(User.id == user_id).values(is_premium=True, premium_until=until)
+            update(User).where(User.id == user_id).values(
+                is_premium=True, premium_until=until
+            )
         )
         await self.session.commit()
 
     async def remove_premium(self, user_id: int):
         await self.session.execute(
-            update(User).where(User.id == user_id).values(is_premium=False, premium_until=None)
+            update(User).where(User.id == user_id).values(
+                is_premium=False, premium_until=None
+            )
         )
         await self.session.commit()
 
@@ -209,11 +263,11 @@ class UserRepo:
 
     async def increment_referral_count(self, referrer_id: int):
         await self.session.execute(
-            update(User).where(User.id == referrer_id).values(
-                referral_count=User.referral_count + 1
-            )
+            update(User)
+            .where(User.id == referrer_id)
+            .values(referral_count=User.referral_count + 1)
         )
-        await self.session.commit()
+        # commit намеренно НЕ здесь
 
     async def get_all_users_count(self) -> int:
         result = await self.session.execute(select(func.count(User.id)))
