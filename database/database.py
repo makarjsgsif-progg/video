@@ -18,7 +18,8 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     connect_args={
-        "ssl": ssl_context,  # ЗАМЕНИ "ssl": True НА ЭТО
+        "ssl": ssl_context,
+        "prepared_statement_cache_size": 0,
         "statement_cache_size": 0
     }
 )
