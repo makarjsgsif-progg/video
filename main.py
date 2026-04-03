@@ -13,7 +13,6 @@ from database.database import init_db
 
 logger = logging.getLogger(__name__)
 
-# Render требует открытый порт для Web Service
 PORT = int(os.environ.get("PORT", 10000))
 
 
@@ -33,6 +32,27 @@ async def start_health_server():
     return runner
 
 
+async def start_polling_with_retry():
+    """Запускает polling с повторными попытками при конфликте"""
+    max_retries = 10
+    retry_delay = 3
+    for attempt in range(max_retries):
+        try:
+            await dp.start_polling(
+                bot,
+                allowed_updates=dp.resolve_used_update_types(),
+                drop_pending_updates=True,
+            )
+            return
+        except TelegramConflictError as e:
+            logger.warning(f"Conflict error (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, 30)
+            else:
+                raise
+
+
 async def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -45,7 +65,6 @@ async def main():
     worker = Worker()
     worker_task = asyncio.create_task(worker.run())
 
-    # Запускаем HTTP-сервер чтобы Render не убивал процесс
     health_runner = await start_health_server()
 
     loop = asyncio.get_running_loop()
@@ -59,27 +78,17 @@ async def main():
         loop.add_signal_handler(sig, _handle_signal)
 
     try:
-        polling_task = asyncio.create_task(
-            dp.start_polling(
-                bot,
-                allowed_updates=dp.resolve_used_update_types(),
-                drop_pending_updates=True,
-            )
-        )
-
+        polling_task = asyncio.create_task(start_polling_with_retry())
         await stop_event.wait()
-
-    except TelegramConflictError:
-        logger.error(
-            "TelegramConflictError: another bot instance is running. "
-            "Waiting 5 seconds and retrying..."
-        )
-        await asyncio.sleep(5)
-        raise
-
+    except Exception as e:
+        logger.exception(f"Fatal error: {e}")
     finally:
         logger.info("Stopping polling...")
-        await dp.stop_polling()
+        polling_task.cancel()
+        try:
+            await polling_task
+        except asyncio.CancelledError:
+            pass
 
         logger.info("Cancelling worker...")
         worker_task.cancel()
