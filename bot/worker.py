@@ -50,118 +50,145 @@ class Worker:
         platform = task.get("platform", "unknown")
         emoji = PLATFORM_EMOJI.get(platform, "📥")
 
+        # ── 1. Проверяем пользователя и лимит (короткая сессия) ──────────────
         async with async_session_maker() as session:
             user_repo = UserRepo(session)
-            download_repo = DownloadRepo(session)
             user = await user_repo.get_user(user_id)
 
             if not user or user.is_banned:
                 return
 
-            # 1. Проверка лимита
-            if not await self.limit_service.check_and_increment(user_id, user.is_premium):
-                used, limit = await self.limit_service.get_usage(user_id)
-                await self._safe_send(
-                    user_id,
-                    f"⏳ <b>Дневной лимит исчерпан</b>\n\n"
-                    f"Ты сегодня уже скачал <b>{used}/{limit}</b> видео.\n\n"
-                    f"🔑 Купи <b>Premium</b> — безлимитные загрузки без ограничений.\n"
-                    f"👥 Или пригласи друзей по /referral — каждый друг = <b>+5 загрузок</b>!",
-                )
-                return
+            is_premium = user.is_premium
 
-            # 2. Скачивание
-            video_bytes, error = await self._download_with_retries(url)
+        # Проверяем лимит вне сессии БД — Redis-операция
+        if not await self.limit_service.check_and_increment(user_id, is_premium):
+            used, limit = await self.limit_service.get_usage(user_id)
+            await self._safe_send(
+                user_id,
+                f"⏳ <b>Дневной лимит исчерпан</b>\n\n"
+                f"Ты сегодня уже скачал <b>{used}/{limit}</b> видео.\n\n"
+                f"🔑 Купи <b>Premium</b> — безлимитные загрузки без ограничений.\n"
+                f"👥 Или пригласи друзей по /referral — каждый друг = <b>+5 загрузок</b>!",
+            )
+            return
 
-            if not video_bytes:
-                await self._handle_download_error(user_id, platform, emoji, error)
-                return
+        # ── 2. Скачивание (может занять до 60 сек, сессия БД НЕ открыта) ─────
+        video_bytes, error = await self._download_with_retries(url)
 
-            # 3. Отправка видео
-            try:
-                video_file = BufferedInputFile(video_bytes.read(), filename="video.mp4")
-                caption = (
-                    f"{emoji} <b>Готово!</b> Твоё видео скачано 🎉\n\n"
-                    f"📲 Поделись ботом с друзьями — /referral"
-                )
-                await bot.send_video(user_id, video=video_file, caption=caption)
+        if not video_bytes:
+            # Если скачать не вышло — откатываем счётчик, чтобы не тратить лимит
+            await self._rollback_limit(user_id, is_premium)
+            await self._handle_download_error(user_id, platform, emoji, error)
+            return
 
+        # ── 3. Отправка видео + запись в БД (новая короткая сессия) ──────────
+        try:
+            video_file = BufferedInputFile(video_bytes.read(), filename="video.mp4")
+            caption = (
+                f"{emoji} <b>Готово!</b> Твоё видео скачано 🎉\n\n"
+                f"📲 Поделись ботом с друзьями — /referral"
+            )
+            await bot.send_video(user_id, video=video_file, caption=caption)
+
+            async with async_session_maker() as session:
+                download_repo = DownloadRepo(session)
                 await download_repo.add_download(user_id, platform)
                 await session.commit()
 
-                # 4. Реклама для не-премиумов
-                if not user.is_premium:
-                    await self._send_ad_if_available(user_id)
+            # 4. Реклама для не-премиумов
+            if not is_premium:
+                await self._send_ad_if_available(user_id)
 
-            except TelegramForbiddenError:
-                logger.info(f"User {user_id} blocked the bot.")
-            except TelegramRetryAfter as e:
-                logger.warning(f"Flood control: retry after {e.retry_after}s")
-                await asyncio.sleep(e.retry_after)
-            except TelegramBadRequest as e:
-                if "file is too big" in str(e).lower():
-                    await self._safe_send(
-                        user_id,
-                        f"😔 <b>Файл слишком большой</b>\n\n"
-                        f"Telegram не принимает видео тяжелее 50 МБ.\n"
-                        f"Попробуй видео покороче или другое качество.",
-                    )
-                else:
-                    logger.error(f"TelegramBadRequest for {user_id}: {e}")
-            except Exception as e:
-                logger.error(f"Error sending video to {user_id}: {e}")
+        except TelegramForbiddenError:
+            logger.info(f"User {user_id} blocked the bot.")
+        except TelegramRetryAfter as e:
+            logger.warning(f"Flood control: retry after {e.retry_after}s")
+            await asyncio.sleep(e.retry_after)
+            # Повторяем отправку после ожидания
+            try:
+                video_bytes.seek(0)
+                video_file = BufferedInputFile(video_bytes.read(), filename="video.mp4")
+                await bot.send_video(user_id, video=video_file, caption=caption)
+            except Exception as retry_err:
+                logger.error(f"Retry send failed for {user_id}: {retry_err}")
+        except TelegramBadRequest as e:
+            if "file is too big" in str(e).lower():
                 await self._safe_send(
-                    user_id, "⚠️ Видео скачано, но не удалось отправить. Попробуй позже."
+                    user_id,
+                    "😔 <b>Файл слишком большой</b>\n\n"
+                    "Telegram не принимает видео тяжелее 50 МБ.\n"
+                    "Попробуй видео покороче или другое качество.",
                 )
+            else:
+                logger.error(f"TelegramBadRequest for {user_id}: {e}")
+                await self._safe_send(user_id, "⚠️ Не удалось отправить видео. Попробуй позже.")
+        except Exception as e:
+            logger.error(f"Error sending video to {user_id}: {e}")
+            await self._safe_send(
+                user_id, "⚠️ Видео скачано, но не удалось отправить. Попробуй позже."
+            )
+
+    async def _rollback_limit(self, user_id: int, is_premium: bool):
+        """Откатывает инкремент лимита если скачивание не удалось."""
+        if is_premium:
+            return
+        try:
+            key = f"daily_limit:{user_id}"
+            await self.limit_service.redis.decr(key)
+        except Exception as e:
+            logger.debug(f"Could not rollback limit for {user_id}: {e}")
 
     async def _handle_download_error(
         self, user_id: int, platform: str, emoji: str, error: Optional[str]
     ):
+        logger.error(f"Download failed for user {user_id}, platform={platform}, error={error!r}")
+
         if error == "auth_required":
             if platform == "youtube":
                 msg = (
-                    f"🔒 <b>YouTube требует авторизацию</b>\n\n"
-                    f"Это видео защищено от скачивания.\n"
-                    f"Попробуй другое видео или обычную ссылку без параметров."
+                    "🔒 <b>YouTube требует авторизацию</b>\n\n"
+                    "Это видео защищено или доступно только с аккаунтом.\n"
+                    "Попробуй другое видео или обычную ссылку без параметров."
                 )
             else:
                 msg = (
-                    f"🔒 <b>Требуется авторизация</b>\n\n"
-                    f"Этот контент закрыт от скачивания.\n"
-                    f"Проверь, что ссылка ведёт на публичное видео."
+                    "🔒 <b>Требуется авторизация</b>\n\n"
+                    "Этот контент закрыт от скачивания.\n"
+                    "Проверь, что ссылка ведёт на публичное видео."
                 )
-        elif error and "Private" in error:
+        elif error and ("Private" in error or "private" in error):
             msg = (
-                f"🔒 <b>Приватное видео</b>\n\n"
-                f"Этот пост закрыт — скачать не получится.\n"
-                f"Попробуй другую ссылку."
+                "🔒 <b>Приватное видео</b>\n\n"
+                "Этот пост закрыт — скачать не получится.\n"
+                "Попробуй другую ссылку."
             )
         elif error and ("unavailable" in error.lower() or "removed" in error.lower()):
             msg = (
-                f"🗑 <b>Видео удалено или недоступно</b>\n\n"
-                f"Контент больше не существует.\n"
-                f"Возможно, автор удалил его."
+                "🗑 <b>Видео удалено или недоступно</b>\n\n"
+                "Контент больше не существует.\n"
+                "Возможно, автор удалил его."
             )
         elif error and "format" in error.lower():
             msg = (
                 f"{emoji} <b>Не удалось скачать</b>\n\n"
-                f"Платформа изменила формат — попробуй скинуть ссылку ещё раз.\n"
-                f"Если не помогает — попробуй другое видео."
+                "Платформа изменила формат — попробуй скинуть ссылку ещё раз.\n"
+                "Если не помогает — попробуй другое видео."
             )
         else:
             msg = (
-                f"😕 <b>Не удалось скачать</b>\n\n"
-                f"Что-то пошло не так. Проверь ссылку и попробуй снова.\n"
-                f"Работают только публичные видео."
+                f"{emoji} <b>Не удалось скачать</b>\n\n"
+                "Что-то пошло не так. Проверь ссылку и попробуй снова.\n"
+                "Работают только публичные видео."
             )
 
         await self._safe_send(user_id, msg)
 
     async def _download_with_retries(
         self, url: str
-    ) -> tuple[Optional[any], Optional[str]]:
+    ) -> tuple[Optional[object], Optional[str]]:
         last_error = None
         for attempt in range(1, 4):
+            logger.info(f"Download attempt {attempt}/3 for {url}")
             video_bytes, error = await self.downloader.download(url)
             if video_bytes:
                 return video_bytes, None
@@ -169,7 +196,8 @@ class Worker:
             last_error = error
             logger.warning(f"Attempt {attempt}/3 failed for {url}: {error}")
 
-            if error in ("auth_required",):
+            # Не повторяем при ошибках авторизации / приватных видео
+            if error in ("auth_required",) or (error and "Private" in error):
                 break
             if attempt < 3:
                 await asyncio.sleep(attempt * 2)
@@ -192,24 +220,16 @@ class Worker:
             logger.debug(f"Could not send message to {user_id}: {e}")
 
     def _task_done_callback(self, task: asyncio.Task):
-        """Убираем завершённый таск из множества активных."""
         self._active_tasks.discard(task)
-        if not task.cancelled() and task.exception():
-            logger.error(f"Task raised an exception: {task.exception()}")
+        if not task.cancelled():
+            exc = task.exception()
+            if exc:
+                logger.error(f"Task raised an exception: {exc}")
 
     async def run(self):
-        """
-        Главный цикл воркера.
-
-        Исправление: теперь не создаётся больше задач, чем max_concurrent_tasks.
-        Если все слоты заняты, воркер ждёт, пока освободится место, и только
-        потом забирает новую задачу из Redis. Это предотвращает накопление
-        тысяч висящих корутин.
-        """
         logger.info("🚀 Worker started")
         while True:
             try:
-                # Не берём новую задачу, если уже запущено максимальное количество
                 if len(self._active_tasks) >= self.max_concurrent_tasks:
                     await asyncio.sleep(0.1)
                     continue
