@@ -2,7 +2,6 @@ import ssl
 import string
 import random
 from datetime import datetime, timedelta
-from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
@@ -18,14 +17,10 @@ from sqlalchemy.pool import NullPool
 from config.config import settings
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
 
 def _to_asyncpg_url(url: str) -> str:
-    """postgresql:// / postgres:// → postgresql+asyncpg://"""
     url = url.replace("postgres://", "postgresql://", 1)
     if "postgresql+asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -33,7 +28,6 @@ def _to_asyncpg_url(url: str) -> str:
 
 
 def _to_psycopg2_url(url: str) -> str:
-    """postgresql+asyncpg:// / postgres:// → postgresql+psycopg2://"""
     url = url.replace("postgres://", "postgresql://", 1)
     url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
     if "postgresql+psycopg2" not in url:
@@ -42,26 +36,23 @@ def _to_psycopg2_url(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Async engine — основной, для всех запросов бота
+# Async engine — SQLAlchemy 2.0.36+ корректно передаёт statement_cache_size=0
+# в asyncpg.connect(), что полностью отключает prepared statements.
 # ---------------------------------------------------------------------------
 def _make_async_engine(url: str):
     if not _is_postgres:
         return create_async_engine(url, echo=False)
-
-    asyncpg_url = _to_asyncpg_url(url)
 
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
 
     return create_async_engine(
-        asyncpg_url,
+        _to_asyncpg_url(url),
         echo=False,
-        # statement_cache_size=0 — ключевой параметр asyncpg.connect(),
-        # отключает prepared statements полностью на уровне драйвера.
         connect_args={
             "ssl": ssl_ctx,
-            "statement_cache_size": 0,
+            "statement_cache_size": 0,   # отключает prepared statements в asyncpg
         },
         pool_size=5,
         max_overflow=10,
@@ -84,18 +75,15 @@ Base = declarative_base()
 
 
 # ---------------------------------------------------------------------------
-# init_db — использует синхронный psycopg2, чтобы полностью обойти
-# проблему с PgBouncer и prepared statements в asyncpg.
-# psycopg2-binary уже есть в requirements.txt.
+# init_db — psycopg2 (sync) чтобы DDL не шёл через PgBouncer asyncpg-путём
 # ---------------------------------------------------------------------------
 async def init_db():
     import asyncio
 
     def _create_tables():
         if _is_postgres:
-            sync_url = _to_psycopg2_url(settings.DATABASE_URL)
             sync_engine = create_engine(
-                sync_url,
+                _to_psycopg2_url(settings.DATABASE_URL),
                 connect_args={"sslmode": "require"},
                 poolclass=NullPool,
             )
@@ -108,8 +96,6 @@ async def init_db():
         finally:
             sync_engine.dispose()
 
-    # Запускаем синхронную DDL операцию в отдельном потоке,
-    # чтобы не блокировать event loop
     await asyncio.to_thread(_create_tables)
 
 
@@ -148,6 +134,15 @@ class Ad(Base):
     message_text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _gen_ref_code() -> str:
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=8))
 
 
 # ---------------------------------------------------------------------------
@@ -303,8 +298,3 @@ class UserRepo:
     async def get_all_user_ids(self) -> list[int]:
         result = await self.session.execute(select(User.id))
         return result.scalars().all()
-
-
-def _gen_ref_code() -> str:
-    chars = string.ascii_uppercase + string.digits
-    return "".join(random.choices(chars, k=8))
