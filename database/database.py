@@ -29,7 +29,13 @@ if "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL:
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    connect_args=_connect_args,
+    connect_args={
+        "ssl": ssl_context,
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+    },
+    pool_pre_ping=True,
+    pool_reset_on_return='rollback',
 )
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

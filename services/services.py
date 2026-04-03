@@ -49,7 +49,9 @@ class Downloader:
                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
             ),
         },
-        "socket_timeout": settings.DOWNLOAD_TIMEOUT,
+        "socket_timeout": 20,
+        "retries": 5,
+        "continuedl": True,
     }
 
     # Цепочка форматов: сначала пробуем хорошее качество, потом best
@@ -119,12 +121,12 @@ class Downloader:
                 logger.exception(f"Critical error downloading {url}: {e}")
                 continue
             finally:
-                # Чистим temp-файлы
-                try:
-                    if "temp_path" in locals() and temp_path and os.path.exists(temp_path):
+                if "temp_path" in locals() and temp_path and os.path.exists(temp_path):
+                    try:
+                        os.close(os.open(temp_path, os.O_RDONLY))  # Снимаем блокировку если зависла
                         os.remove(temp_path)
-                except OSError:
-                    pass
+                    except:
+                        pass
 
         logger.error(f"All format attempts failed for {url}. Last error: {last_error}")
         return None, last_error
