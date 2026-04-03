@@ -4,30 +4,29 @@ import random
 from datetime import datetime, timedelta
 import asyncio
 from functools import partial
+from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.extras
 from psycopg2.pool import ThreadedConnectionPool
-from contextlib import contextmanager
 
 from config.config import settings
 
-# ---------------------------------------------------------------------------
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
-# Создаём синхронный пул соединений (работает в потоках)
+# ---------------------------------------------------------------------------
+# Синхронный пул соединений (работает в потоках)
+# ---------------------------------------------------------------------------
 _pool = None
 
 def _get_pool():
     global _pool
     if _pool is None:
-        # Преобразуем asyncpg URL в psycopg2
         url = settings.DATABASE_URL
         if _is_postgres:
-            # Заменяем asyncpg на psycopg2
+            # Преобразуем asyncpg URL в psycopg2
             url = url.replace("postgresql+asyncpg://", "postgresql://")
             url = url.replace("postgresql+psycopg2://", "postgresql://")
-            # Убираем параметры, которые не поддерживает psycopg2
             if "?" in url:
                 url = url.split("?")[0]
         _pool = ThreadedConnectionPool(
@@ -54,11 +53,76 @@ def run_sync(func, *args, **kwargs):
     return loop.run_in_executor(None, partial(func, *args, **kwargs))
 
 # ---------------------------------------------------------------------------
-# Асинхронные репозитории (обёртки над синхронным кодом)
+# Асинхронный контекстный менеджер для совместимости с мидлварями
 # ---------------------------------------------------------------------------
+class AsyncSessionCompat:
+    def __init__(self, conn):
+        self._conn = conn
+        self._cursor = None
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        if self._cursor:
+            await self._close_cursor()
+
+    async def _get_cursor(self):
+        if not self._cursor:
+            def _make():
+                return self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            self._cursor = await run_sync(_make)
+        return self._cursor
+
+    async def _close_cursor(self):
+        if self._cursor:
+            def _close():
+                self._cursor.close()
+            await run_sync(_close)
+            self._cursor = None
+
+    async def execute(self, statement, *params):
+        cursor = await self._get_cursor()
+        def _exec():
+            cursor.execute(str(statement), params)
+        await run_sync(_exec)
+        return self
+
+    async def commit(self):
+        def _commit():
+            self._conn.commit()
+        await run_sync(_commit)
+
+    async def scalars(self):
+        def _fetch():
+            rows = self._cursor.fetchall()
+            return [dict(row) for row in rows]
+        rows = await run_sync(_fetch)
+        return type('Result', (), {'all': lambda: rows, 'first': lambda: rows[0] if rows else None})()
+
+
+async def get_async_session():
+    def _get_conn():
+        pool = _get_pool()
+        return pool.getconn()
+    conn = await run_sync(_get_conn)
+    return AsyncSessionCompat(conn)
+
+
+class AsyncSessionMaker:
+    async def __aenter__(self):
+        self.session = await get_async_session()
+        return self.session
+    async def __aexit__(self, *args):
+        pass  # соединение вернётся в пул при сборщике мусора
+
+async_session_maker = AsyncSessionMaker
+
+# ---------------------------------------------------------------------------
+# Репозитории (переписаны под синхронный доступ)
+# ---------------------------------------------------------------------------
 class UserRepo:
-    def __init__(self, session=None):  # session игнорируется
+    def __init__(self, session=None):
         pass
 
     async def get_user(self, user_id: int):
@@ -67,12 +131,9 @@ class UserRepo:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
                     row = cur.fetchone()
-                    if row:
-                        return dict(row)
-                    return None
+                    return dict(row) if row else None
         data = await run_sync(_get)
         if data:
-            # Возвращаем объект, совместимый с ожидаемой моделью
             return type('User', (), data)()
         return None
 
@@ -81,18 +142,16 @@ class UserRepo:
             code = _gen_ref_code()
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
-                    # Убедимся, что код уникален
                     while True:
                         cur.execute("SELECT 1 FROM users WHERE referral_code = %s", (code,))
                         if not cur.fetchone():
                             break
                         code = _gen_ref_code()
                     cur.execute(
-                        "INSERT INTO users (id, language, referral_code, referred_by) VALUES (%s, %s, %s, %s) RETURNING id",
+                        "INSERT INTO users (id, language, referral_code, referred_by) VALUES (%s, %s, %s, %s)",
                         (user_id, language, code, referred_by)
                     )
                     conn.commit()
-                    return user_id
         await run_sync(_create)
         return await self.get_user(user_id)
 
@@ -159,9 +218,7 @@ class UserRepo:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute("SELECT * FROM users WHERE referral_code = %s", (code.upper(),))
                     row = cur.fetchone()
-                    if row:
-                        return dict(row)
-                    return None
+                    return dict(row) if row else None
         data = await run_sync(_get)
         if data:
             return type('User', (), data)()
@@ -231,7 +288,7 @@ class AdRepo:
         def _add():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("INSERT INTO ads (message_text) VALUES (%s) RETURNING id", (text,))
+                    cur.execute("INSERT INTO ads (message_text) VALUES (%s)", (text,))
                     conn.commit()
         await run_sync(_add)
 
@@ -270,9 +327,6 @@ class AdRepo:
         await run_sync(_toggle)
 
 
-# ---------------------------------------------------------------------------
-# init_db — создание таблиц
-# ---------------------------------------------------------------------------
 async def init_db():
     def _create():
         with get_sync_connection() as conn:
@@ -313,15 +367,3 @@ async def init_db():
 def _gen_ref_code() -> str:
     chars = string.ascii_uppercase + string.digits
     return "".join(random.choices(chars, k=8))
-
-
-# Для совместимости со старым кодом, где ожидается async_session_maker
-class DummySession:
-    async def __aenter__(self):
-        return self
-    async def __aexit__(self, *args):
-        pass
-    async def commit(self):
-        pass
-
-async_session_maker = None  # не используется
