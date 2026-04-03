@@ -7,7 +7,11 @@ from sqlalchemy.orm import declarative_base
 from config.config import settings
 
 # === Engine & Session ===
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    connect_args={"ssl": True}
+)
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
