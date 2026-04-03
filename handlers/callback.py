@@ -1,23 +1,27 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
+
 from database.database import async_session_maker, UserRepo
-from utils.i18n import get_text
+from services.services import LimitService
+from utils.i18n import languages, get_text
 
 router = Router()
 
+limit_service = LimitService()
+
+
 @router.callback_query(F.data.startswith("lang_"))
-async def set_language_callback(call: CallbackQuery, user_db):
-    lang = call.data.split("_")[1]
+async def set_language_callback(callback: CallbackQuery, user_db):
+    lang_code = callback.data.split("_", 1)[1]
+
+    if lang_code not in languages:
+        await callback.answer("❌ Unknown language", show_alert=True)
+        return
+
     async with async_session_maker() as session:
         repo = UserRepo(session)
-        await repo.set_language(call.from_user.id, lang)
+        await repo.set_language(callback.from_user.id, lang_code)
 
-    # FIX: call.message может быть None если сообщение старше 48ч или удалено Telegram'ом
-    if call.message:
-        try:
-            await call.message.delete()
-        except Exception:
-            pass
-        await call.message.answer(get_text(lang, "language_set"))
-
-    await call.answer(get_text(lang, "language_set"))
+    text = get_text(lang_code, "language_set")
+    await callback.message.edit_text(f"✅ {text}")
+    await callback.answer()

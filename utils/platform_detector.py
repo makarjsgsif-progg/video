@@ -1,22 +1,66 @@
 import re
+from enum import Enum
+from typing import Optional, Dict, Final
 
-def detect_platform(url: str) -> str | None:
-    patterns = {
-        "tiktok": r"(tiktok\.com|vm\.tiktok\.com)",
-        "instagram": r"(instagram\.com|instagr\.am|reels)",
-        "youtube": r"(youtube\.com|youtu\.be|shorts)",
-        "twitter": r"(twitter\.com|x\.com)",
-        "reddit": r"(reddit\.com)",
-        "facebook": r"(facebook\.com|fb\.watch)",
-        "vimeo": r"(vimeo\.com)",
-        "twitch": r"(twitch\.tv|clips\.twitch\.tv)",
-        "pinterest": r"(pinterest\.com)",
-        "snapchat": r"(snapchat\.com)",
-        "likee": r"(likee\.video|likee\.com)",
-        "triller": r"(triller\.co)",
-        "microsoftstream": r"(microsoftstream\.com)"
-    }
-    for platform, pattern in patterns.items():
-        if re.search(pattern, url, re.IGNORECASE):
+
+class Platform(str, Enum):
+    """
+    Использование Enum делает код типизированным.
+    Теперь ты не ошибешься в написании "tik_tok" vs "tiktok".
+    """
+    TIKTOK = "tiktok"
+    INSTAGRAM = "instagram"
+    YOUTUBE = "youtube"
+    TWITTER = "twitter"
+    REDDIT = "reddit"
+    FACEBOOK = "facebook"
+    VIMEO = "vimeo"
+    TWITCH = "twitch"
+    PINTEREST = "pinterest"
+    SNAPCHAT = "snapchat"
+    LIKEE = "likee"
+    TRILLER = "triller"
+    MS_STREAM = "microsoftstream"
+
+
+# Компилируем паттерны заранее.
+# Это ускоряет работу, так как Python не нужно пересобирать регулярку при каждом вызове.
+PLATFORM_PATTERNS: Final[Dict[Platform, re.Pattern]] = {
+    Platform.TIKTOK: re.compile(r"tiktok\.com|vm\.tiktok\.com", re.I),
+    Platform.INSTAGRAM: re.compile(r"instagram\.com|instagr\.am|reels", re.I),
+    Platform.YOUTUBE: re.compile(r"youtube\.com|youtu\.be|shorts", re.I),
+    Platform.TWITTER: re.compile(r"twitter\.com|x\.com", re.I),
+    Platform.REDDIT: re.compile(r"reddit\.com", re.I),
+    Platform.FACEBOOK: re.compile(r"facebook\.com|fb\.watch", re.I),
+    Platform.VIMEO: re.compile(r"vimeo\.com", re.I),
+    Platform.TWITCH: re.compile(r"twitch\.tv|clips\.twitch\.tv", re.I),
+    Platform.PINTEREST: re.compile(r"pinterest\.com", re.I),
+    Platform.SNAPCHAT: re.compile(r"snapchat\.com", re.I),
+    Platform.LIKEE: re.compile(r"likee\.(video|com)", re.I),
+    Platform.TRILLER: re.compile(r"triller\.co", re.I),
+    Platform.MS_STREAM: re.compile(r"microsoftstream\.com", re.I),
+}
+
+
+def detect_platform(url: Optional[str]) -> Optional[Platform]:
+    """
+    Определяет платформу по URL.
+
+    :param url: Ссылка на видео/пост
+    :return: Член Enum Platform или None, если совпадений нет
+    """
+    if not url or not isinstance(url, str):
+        return None
+
+    # strip() уберет лишние пробелы, которые часто копируются вместе со ссылкой
+    clean_url = url.strip()
+
+    for platform, pattern in PLATFORM_PATTERNS.items():
+        if pattern.search(clean_url):
             return platform
+
     return None
+
+# Пример использования:
+# if detect_platform(url) == Platform.YOUTUBE:
+#     ...

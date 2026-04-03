@@ -6,12 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Settings(BaseSettings):
-    # Указываем Pydantic, что нужно брать данные из окружения
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     BOT_TOKEN: str
-    # Используем Union, чтобы он не ругался при первичной загрузке
     ADMIN_IDS: List[int]
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./bot.db"
@@ -21,15 +20,19 @@ class Settings(BaseSettings):
     MAX_RETRIES: int = 3
     DOWNLOAD_TIMEOUT: int = 60
 
+    # Файл cookies для YouTube и других платформ
+    # Если файла нет — бот работает без него (но YouTube может блокировать)
+    COOKIES_FILE: str = "cookies.txt"
+
     @field_validator("ADMIN_IDS", mode="before")
     @classmethod
     def parse_admin_ids(cls, v: Union[str, List[int], int]) -> List[int]:
         if isinstance(v, str):
-            # Убираем лишние пробелы и скобки, если они вдруг прилетят
             v = v.replace("[", "").replace("]", "").strip()
             return [int(i.strip()) for i in v.split(",") if i.strip()]
         if isinstance(v, int):
             return [v]
         return v
+
 
 settings = Settings()

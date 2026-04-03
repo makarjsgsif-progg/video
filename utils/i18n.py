@@ -22,23 +22,26 @@ def load_translations():
             for lang, content in data.items():
                 translations[lang] = content
     else:
-        # fallback – только английский
-        translations["en"] = {
-            "welcome": "Hello {name}! Send me a link.",
-            "choose_language": "Choose language:",
-            "language_set": "Language updated!",
-            "unsupported_url": "Unsupported URL.",
-            "processing": "Downloading...",
-            "banned": "You are banned.",
-            "daily_limit_reached": "Daily limit reached.",
-            "premium_active": "Premium active until {until}.",
-            "premium_info": "Upgrade to premium."
+        # fallback – русский по умолчанию
+        translations["ru"] = {
+            "welcome": "Привет {name}! Отправь ссылку на видео.",
+            "choose_language": "Выбери язык:",
+            "language_set": "Язык обновлён!",
+            "unsupported_url": "Неподдерживаемая ссылка.",
+            "processing": "Скачиваю...",
+            "banned": "Ты забанен.",
+            "daily_limit_reached": "Дневной лимит исчерпан.",
+            "premium_active": "Премиум активен до {until}.",
+            "premium_info": "Купи премиум."
         }
 
 load_translations()
 
 def get_text(lang: str, key: str, **kwargs) -> str:
+    # Сначала пробуем запрошенный язык, потом русский, потом английский
     text = translations.get(lang, {}).get(key)
+    if not text:
+        text = translations.get("ru", {}).get(key)
     if not text:
         text = translations.get("en", {}).get(key, key)
     if kwargs:
