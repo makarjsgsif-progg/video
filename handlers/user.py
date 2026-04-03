@@ -36,25 +36,24 @@ async def cmd_start(message: Message, gettext, user_db, bot: Bot):
     args = message.text.split(maxsplit=1)
     ref_code = args[1].strip() if len(args) > 1 else None
 
-    # Обрабатываем реферала, если пользователь новый (registered_at почти совпадает с now)
+    # Обрабатываем реферала
     if ref_code and user_db.referred_by is None and ref_code != user_db.referral_code:
         async with async_session_maker() as session:
             repo = UserRepo(session)
             referrer = await repo.get_user_by_referral_code(ref_code)
 
             if referrer and referrer.id != message.from_user.id:
-                # Записываем, кто пригласил
+                # Используем правильный метод обновления через репозиторий
+                from sqlalchemy import update
+                from database.database import User
+
                 await session.execute(
-                    __import__("sqlalchemy", fromlist=["update"]).update(
-                        __import__("database.database", fromlist=["User"]).User
-                    ).where(
-                        __import__("database.database", fromlist=["User"]).User.id == message.from_user.id
-                    ).values(referred_by=referrer.id)
+                    update(User).where(User.id == message.from_user.id).values(referred_by=referrer.id)
                 )
                 await repo.increment_referral_count(referrer.id)
                 await session.commit()
 
-                # Бонус рефереру: +5 загрузок
+                # Начисляем бонус
                 await get_limit_service().add_referral_bonus(referrer.id, amount=5)
 
                 try:
@@ -149,7 +148,7 @@ async def cmd_stats(message: Message, user_db):
     await message.answer(text)
 
 
-@router.message(F.text)
+@router.message(F.text, ~F.text.startswith("/"))
 async def handle_url(message: Message, gettext, user_db):
     url = message.text.strip()
     platform = detect_platform(url)

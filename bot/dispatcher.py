@@ -5,8 +5,9 @@ from middlewares.middlewares import UserMiddleware, ThrottleMiddleware, I18nMidd
 
 def setup_handlers():
     router = Router()
-    router.include_router(user.router)
+    # Админский роутер должен быть ВЫШЕ пользовательского
     router.include_router(admin.router)
+    router.include_router(user.router)
     router.include_router(callback.router)
     dp.include_router(router)
 
