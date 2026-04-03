@@ -19,7 +19,7 @@ engine = create_async_engine(
     echo=False,
     connect_args={
         "ssl": ssl_context,  # ЗАМЕНИ "ssl": True НА ЭТО
-        "prepared_statement_cache_size": 0
+        "statement_cache_size": 0
     }
 )
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
