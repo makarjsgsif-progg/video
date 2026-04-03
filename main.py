@@ -33,7 +33,6 @@ async def start_health_server():
 
 
 async def start_polling_with_retry():
-    """Запускает polling с повторными попытками при конфликте"""
     max_retries = 10
     retry_delay = 3
     for attempt in range(max_retries):
@@ -76,6 +75,10 @@ async def main():
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _handle_signal)
+
+    # Задержка перед запуском polling, чтобы старый процесс на Render успел завершиться
+    logger.info("Waiting 5 seconds before starting polling to avoid conflict...")
+    await asyncio.sleep(5)
 
     try:
         polling_task = asyncio.create_task(start_polling_with_retry())

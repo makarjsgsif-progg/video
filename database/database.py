@@ -36,9 +36,6 @@ def _to_psycopg2_url(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Async engine — SQLAlchemy 2.0.36+ корректно передаёт statement_cache_size=0
-# в asyncpg.connect(), что полностью отключает prepared statements.
-# ---------------------------------------------------------------------------
 def _make_async_engine(url: str):
     if not _is_postgres:
         return create_async_engine(url, echo=False)
@@ -47,13 +44,21 @@ def _make_async_engine(url: str):
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
 
+    # Ключевое исправление: отключаем prepared statements на всех соединениях
+    # statement_cache_size=0 – для asyncpg
+    # server_settings – дополнительные параметры PostgreSQL сессии
+    connect_args = {
+        "ssl": ssl_ctx,
+        "statement_cache_size": 0,
+        "server_settings": {
+            "plan_cache_mode": "force_custom_plan",  # отключает prepared statements
+        }
+    }
+
     return create_async_engine(
         _to_asyncpg_url(url),
         echo=False,
-        connect_args={
-            "ssl": ssl_ctx,
-            "statement_cache_size": 0,   # отключает prepared statements в asyncpg
-        },
+        connect_args=connect_args,
         pool_size=5,
         max_overflow=10,
         pool_timeout=30,
@@ -75,7 +80,7 @@ Base = declarative_base()
 
 
 # ---------------------------------------------------------------------------
-# init_db — psycopg2 (sync) чтобы DDL не шёл через PgBouncer asyncpg-путём
+# init_db — psycopg2 (sync) для DDL (не использует prepared statements)
 # ---------------------------------------------------------------------------
 async def init_db():
     import asyncio
@@ -100,19 +105,17 @@ async def init_db():
 
 
 # ---------------------------------------------------------------------------
-# Models
+# Models (без изменений, оставляем как есть)
 # ---------------------------------------------------------------------------
 
 class User(Base):
     __tablename__ = "users"
-
     id = Column(BigInteger, primary_key=True)
     language = Column(String(5), default="en")
     is_premium = Column(Boolean, default=False)
     premium_until = Column(DateTime, nullable=True)
     is_banned = Column(Boolean, default=False)
     registered_at = Column(DateTime, server_default=func.now())
-
     referral_code = Column(String(16), unique=True, nullable=True)
     referred_by = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     referral_count = Column(Integer, default=0)
@@ -120,7 +123,6 @@ class User(Base):
 
 class Download(Base):
     __tablename__ = "downloads"
-
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, ForeignKey("users.id"))
     platform = Column(String(50))
@@ -129,7 +131,6 @@ class Download(Base):
 
 class Ad(Base):
     __tablename__ = "ads"
-
     id = Column(Integer, primary_key=True)
     message_text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -137,16 +138,7 @@ class Ad(Base):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _gen_ref_code() -> str:
-    chars = string.ascii_uppercase + string.digits
-    return "".join(random.choices(chars, k=8))
-
-
-# ---------------------------------------------------------------------------
-# Repositories
+# Repositories (без изменений, оставляем как есть)
 # ---------------------------------------------------------------------------
 
 class AdRepo:
@@ -298,3 +290,9 @@ class UserRepo:
     async def get_all_user_ids(self) -> list[int]:
         result = await self.session.execute(select(User.id))
         return result.scalars().all()
+
+
+# Helper
+def _gen_ref_code() -> str:
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=8))
