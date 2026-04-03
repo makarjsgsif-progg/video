@@ -1,3 +1,4 @@
+import ssl  # ДОБАВЬ ЭТО
 from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, Text, ForeignKey, select, update, delete, func
@@ -6,11 +7,20 @@ from sqlalchemy.orm import declarative_base
 
 from config.config import settings
 
+# --- ЭТОТ БЛОК НУЖЕН ДЛЯ SUPABASE ---
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+# ------------------------------------
+
 # === Engine & Session ===
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    connect_args={"ssl": True}
+    connect_args={
+        "ssl": ssl_context,  # ЗАМЕНИ "ssl": True НА ЭТО
+        "prepared_statement_cache_size": 0
+    }
 )
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
