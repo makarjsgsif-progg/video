@@ -3,18 +3,21 @@ import string
 import random
 from datetime import datetime, timedelta
 
+import asyncpg
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
-    BigInteger, Text, ForeignKey, select, update, delete, func, text,
+    BigInteger, Text, ForeignKey, select, update, delete, func,
 )
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    create_async_engine, AsyncSession, async_sessionmaker,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool
 
 from config.config import settings
 
 # ---------------------------------------------------------------------------
-# SSL — нужен для Supabase / любого managed PostgreSQL
+# SSL
 # ---------------------------------------------------------------------------
 ssl_context = ssl.create_default_context()
 ssl_context.check_hostname = False
@@ -22,39 +25,49 @@ ssl_context.verify_mode = ssl.CERT_NONE
 
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
-# ---------------------------------------------------------------------------
-# connect_args — отключаем prepared statements для PgBouncer (transaction mode)
-# statement_cache_size=0 отключает кеш на уровне asyncpg
-# prepared_statement_cache_size=0 — дополнительный параметр SQLAlchemy asyncpg диалекта
-# ---------------------------------------------------------------------------
-_connect_args: dict = {}
-if _is_postgres:
-    _connect_args = {
-        "ssl": ssl_context,
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-    }
 
 # ---------------------------------------------------------------------------
-# Основной engine
+# Фабрика engine с asyncpg creator — единственный способ надёжно передать
+# statement_cache_size=0 при работе через PgBouncer в transaction mode.
+# connect_args в create_async_engine для asyncpg диалекта НЕ передаёт
+# statement_cache_size напрямую в asyncpg.connect(), поэтому используем creator.
 # ---------------------------------------------------------------------------
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,
-    connect_args=_connect_args,
-    pool_pre_ping=True,
-    pool_reset_on_return="rollback",
-    **(
-        {
-            "pool_size": 5,
-            "max_overflow": 10,
-            "pool_timeout": 30,
-            "pool_recycle": 1800,
-        }
-        if _is_postgres
-        else {}
-    ),
-)
+def _make_engine(url: str, use_nullpool: bool = False):
+    if _is_postgres:
+        # asyncpg принимает postgresql://, а не postgresql+asyncpg://
+        asyncpg_url = (
+            url
+            .replace("postgresql+asyncpg://", "postgresql://")
+            .replace("postgres://", "postgresql://")
+        )
+
+        async def _connect():
+            return await asyncpg.connect(
+                asyncpg_url,
+                ssl=ssl_context,
+                statement_cache_size=0,  # ← отключает prepared statements полностью
+            )
+
+        kwargs: dict = {"echo": False, "creator": _connect}
+        if use_nullpool:
+            kwargs["poolclass"] = NullPool
+        else:
+            kwargs.update(
+                pool_size=5,
+                max_overflow=10,
+                pool_timeout=30,
+                pool_recycle=1800,
+                pool_pre_ping=True,
+                pool_reset_on_return="rollback",
+            )
+
+        # URL фиктивный — реальное соединение создаёт creator
+        return create_async_engine("postgresql+asyncpg://", **kwargs)
+    else:
+        return create_async_engine(url, echo=False)
+
+
+engine = _make_engine(settings.DATABASE_URL)
 
 async_session_maker = async_sessionmaker(
     engine,
@@ -75,20 +88,8 @@ def _gen_ref_code() -> str:
 
 
 async def init_db():
-    """
-    Создаёт таблицы если их нет.
-
-    Для Supabase/PgBouncer используем NullPool (одно прямое соединение),
-    чтобы DDL-команды не шли через пулер в transaction mode.
-    statement_cache_size=0 обязателен и здесь — даже для DDL.
-    """
     if _is_postgres:
-        ddl_engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=False,
-            connect_args=_connect_args,
-            poolclass=NullPool,
-        )
+        ddl_engine = _make_engine(settings.DATABASE_URL, use_nullpool=True)
         try:
             async with ddl_engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
