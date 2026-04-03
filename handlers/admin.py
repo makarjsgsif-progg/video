@@ -1,11 +1,10 @@
+import asyncio
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
+from sqlalchemy import select
 from config.config import settings
-from database.db import async_session_maker
-from database.user_repo import UserRepo
-from database.download_repo import DownloadRepo
-from database.ad_repo import AdRepo
+from database.database import async_session_maker, UserRepo, DownloadRepo, AdRepo, User
 
 router = Router()
 
@@ -133,8 +132,6 @@ async def admin_broadcast(message: Message):
         await message.answer("Usage: /admin_broadcast <message>")
         return
     async with async_session_maker() as session:
-        user_repo = UserRepo(session)
-        from database.models import User
         result = await session.execute(select(User.id))
         users = result.scalars().all()
     count = 0

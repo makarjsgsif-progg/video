@@ -1,5 +1,6 @@
 aiogram==3.7.0
 aiosqlite==0.20.0
+aiofiles==23.2.1
 sqlalchemy==2.0.29
 alembic==1.13.1
 redis==5.0.4

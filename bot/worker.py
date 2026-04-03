@@ -1,13 +1,14 @@
 import asyncio
 import logging
-from services.queue_service import QueueService
-from services.downloader import Downloader
-from services.ad_service import AdService
-from services.limit_service import LimitService
-from database.user_repo import UserRepo
-from database.download_repo import DownloadRepo
-from database.db import async_session_maker
+import random
+
+from aiogram.types import BufferedInputFile
+
+from services.services import QueueService, Downloader, AdService, LimitService
+from database.database import async_session_maker, UserRepo, DownloadRepo
 from bot.loader import bot
+
+logger = logging.getLogger(__name__)
 
 
 class Worker:
@@ -38,29 +39,36 @@ class Worker:
 
             retries = 0
             video_bytes = None
+            error = None
             while retries < 3:
                 video_bytes, error = await self.downloader.download(url)
                 if video_bytes:
                     break
                 retries += 1
+                logger.warning(f"Download attempt {retries} failed for {url}: {error}")
                 await asyncio.sleep(2)
 
             if video_bytes:
-                await bot.send_video(user_id, video=video_bytes)
+                video_file = BufferedInputFile(video_bytes.read(), filename="video.mp4")
+                await bot.send_video(user_id, video=video_file)
                 await download_repo.add_download(user_id, platform)
 
                 if not is_premium:
                     ads = await self.ad_service.get_active_ads()
                     if ads:
-                        import random
                         ad = random.choice(ads)
                         await bot.send_message(user_id, f"📢 {ad.message_text}")
             else:
+                logger.error(f"All download attempts failed for {url}: {error}")
                 await bot.send_message(user_id, f"❌ Failed to download: {error}")
 
     async def run(self):
+        logger.info("Worker started")
         while True:
-            task = await self.queue_service.pop_task()
-            if task:
-                await self.process_task(task)
+            try:
+                task = await self.queue_service.pop_task()
+                if task:
+                    await self.process_task(task)
+            except Exception as e:
+                logger.exception(f"Worker error: {e}")
             await asyncio.sleep(0.5)

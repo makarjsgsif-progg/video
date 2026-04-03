@@ -1,9 +1,7 @@
 from aiogram import Router
 from bot.loader import dp
 from handlers import user, admin, callback
-from middlewares.user_middleware import UserMiddleware
-from middlewares.throttle_middleware import ThrottleMiddleware
-from middlewares.i18n_middleware import I18nMiddleware
+from middlewares.middlewares import UserMiddleware, ThrottleMiddleware, I18nMiddleware
 
 def setup_handlers():
     router = Router()
@@ -13,10 +11,14 @@ def setup_handlers():
     dp.include_router(router)
 
 def setup_middlewares():
+    # FIX: один общий экземпляр ThrottleMiddleware для message и callback_query,
+    # иначе у каждого свой last_calls и троттлинг не работает на callback
+    throttle = ThrottleMiddleware()
+
     dp.message.outer_middleware(UserMiddleware())
     dp.callback_query.outer_middleware(UserMiddleware())
-    dp.message.outer_middleware(ThrottleMiddleware())
-    dp.callback_query.outer_middleware(ThrottleMiddleware())
+    dp.message.outer_middleware(throttle)
+    dp.callback_query.outer_middleware(throttle)
     dp.message.middleware(I18nMiddleware())
     dp.callback_query.middleware(I18nMiddleware())
 
