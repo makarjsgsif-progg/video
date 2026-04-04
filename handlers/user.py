@@ -1,18 +1,14 @@
 """
 handlers/user.py
 
-Улучшения:
-- /start: реферальная система теперь поддерживает оба формата приглашения:
-  числовой user_id (?start=12345) и буквенный referral_code (?start=ABC123XY).
-  Раньше обрабатывался только числовой формат — реферальные коды игнорировались.
-- /status: новая команда — показывает текущий лимит, статус Premium и очередь.
-  Полезна пользователям, у которых «зависла» задача.
-- handle_url: извлекает URL из текста с помощью regex — работает даже если
-  пользователь прислал ссылку вместе с текстом (например, «вот видео: https://...»)
-- Кнопка «📥 Скачать видео» показывает список поддерживаемых платформ
-  с актуальным лимитом пользователя.
-- Профиль: поле реферального кода (для шаринга), форматирование дат.
-- Все хендлеры: специфические except, профессиональное логирование.
+Изменения:
+- Полностью переписан копирайтинг на вирусный/энергичный русский
+- Добавлен /support — форвардинг сообщений в @YourBotPayments с меткой отправителя
+- Inline-кнопка «Наш канал» (https://t.me/downloaddq) прикреплена к стартовому
+  сообщению и к ключевым ответам
+- handle_url теперь ведёт в support, если пользователь пишет текст (не ссылку)
+  вместо молчаливого «не понимаю»
+- Обновлены все строки (кнопки меню, подсказки, ошибки)
 """
 
 import logging
@@ -40,6 +36,9 @@ logger = logging.getLogger(__name__)
 # Regex для извлечения URL из произвольного текста
 _URL_RE = re.compile(r"https?://[^\s]+", re.I)
 
+# Куда форвардить support-сообщения
+SUPPORT_USERNAME = "@YourBotPayments"
+
 # --------------------------------------------------------------------------- #
 #  Синглтоны сервисов                                                          #
 # --------------------------------------------------------------------------- #
@@ -63,6 +62,25 @@ def get_limit_service() -> LimitService:
 
 
 # --------------------------------------------------------------------------- #
+#  Inline-кнопки (канал + поддержка)                                          #
+# --------------------------------------------------------------------------- #
+
+def channel_kb() -> InlineKeyboardMarkup:
+    """Inline-клавиатура с кнопкой канала — крепится к сообщениям."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📣 Наш канал", url="https://t.me/downloaddq"),
+    ]])
+
+
+def channel_and_support_kb() -> InlineKeyboardMarkup:
+    """Канал + поддержка в одной строке."""
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📣 Наш канал", url="https://t.me/downloaddq"),
+        InlineKeyboardButton(text="🆘 Поддержка", url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}"),
+    ]])
+
+
+# --------------------------------------------------------------------------- #
 #  Клавиатура                                                                  #
 # --------------------------------------------------------------------------- #
 
@@ -71,10 +89,10 @@ def main_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="📥 Скачать видео"), KeyboardButton(text="👤 Мой профиль")],
             [KeyboardButton(text="🔗 Реферальная ссылка"), KeyboardButton(text="💎 Премиум")],
-            [KeyboardButton(text="🌍 Язык"), KeyboardButton(text="ℹ️ Помощь")],
+            [KeyboardButton(text="🌍 Язык"), KeyboardButton(text="🆘 Поддержка")],
         ],
         resize_keyboard=True,
-        input_field_placeholder="Вставь ссылку на видео…",
+        input_field_placeholder="Вставь ссылку — скачаю за 5 сек ⚡",
     )
 
 
@@ -84,7 +102,7 @@ _KEYBOARD_BUTTONS = frozenset({
     "🔗 Реферальная ссылка",
     "💎 Премиум",
     "🌍 Язык",
-    "ℹ️ Помощь",
+    "🆘 Поддержка",
 })
 
 
@@ -93,7 +111,6 @@ _KEYBOARD_BUTTONS = frozenset({
 # --------------------------------------------------------------------------- #
 
 def _is_valid_url(text: str) -> bool:
-    """Быстрая проверка: начинается ли строка с http/https и имеет домен."""
     try:
         result = urlparse(text.strip())
         return result.scheme in ("http", "https") and bool(result.netloc)
@@ -102,10 +119,6 @@ def _is_valid_url(text: str) -> bool:
 
 
 def _extract_url(text: str) -> str | None:
-    """
-    Извлекает первый URL из произвольного текста.
-    Работает даже если пользователь написал «вот видос https://tiktok.com/...».
-    """
     match = _URL_RE.search(text)
     return match.group(0).rstrip(".,!?)>»") if match else None
 
@@ -119,25 +132,31 @@ async def cmd_start(message: Message, gettext, user_db, bot: Bot):
     args = message.text.split(maxsplit=1)
     ref_arg = args[1].strip() if len(args) > 1 else None
 
-    # Реферальная система: принимаем и числовой ID, и буквенный referral_code
     if ref_arg and getattr(user_db, "referred_by", None) is None:
         await _process_referral(message, user_db, ref_arg, bot)
 
+    name = message.from_user.first_name or "друг"
     await message.answer(
-        gettext("welcome", name=message.from_user.first_name),
+        f"⚡️ <b>Привет, {name}!</b>\n\n"
+        f"Я скачиваю видео без водяных знаков — быстро, чисто, бесплатно.\n\n"
+        f"<b>Просто скинь ссылку</b> из TikTok, Instagram, Twitter, Reddit, "
+        f"YouTube Shorts, Vimeo, Twitch и ещё 50+ платформ.\n\n"
+        f"Видео придёт прямо сюда через несколько секунд 🎬\n\n"
+        f"👇 Начни прямо сейчас — вставь ссылку в чат!",
         reply_markup=main_keyboard(),
+    )
+
+    # Inline-кнопка канала отдельным сообщением, чтобы не перекрывать reply-клавиатуру
+    await message.answer(
+        "📣 Подпишись на наш канал — там обновления, фишки и розыгрыши:",
+        reply_markup=channel_kb(),
     )
 
 
 async def _process_referral(message: Message, user_db, ref_arg: str, bot: Bot):
-    """
-    Обрабатывает реферальный аргумент /start.
-    Поддерживает формат числового user_id и буквенного referral_code.
-    """
     repo = UserRepo()
     referrer = None
 
-    # Формат 1: числовой user_id (?start=123456)
     try:
         referrer_id = int(ref_arg)
         if referrer_id != message.from_user.id:
@@ -145,7 +164,6 @@ async def _process_referral(message: Message, user_db, ref_arg: str, bot: Bot):
     except ValueError:
         pass
 
-    # Формат 2: буквенный referral_code (?start=ABC123XY)
     if referrer is None and ref_arg.isalnum() and not ref_arg.isdigit():
         try:
             referrer = await repo.get_user_by_referral_code(ref_arg)
@@ -157,7 +175,7 @@ async def _process_referral(message: Message, user_db, ref_arg: str, bot: Bot):
 
     referrer_id = referrer.id
     if referrer_id == message.from_user.id:
-        return  # Нельзя пригласить самого себя
+        return
 
     try:
         await repo.set_referred_by(message.from_user.id, referrer_id)
@@ -167,12 +185,13 @@ async def _process_referral(message: Message, user_db, ref_arg: str, bot: Bot):
         try:
             await bot.send_message(
                 referrer_id,
-                f"🎉 <b>По твоей ссылке зарегистрировался новый пользователь!</b>\n\n"
-                f"Тебе начислено <b>+5 бонусных загрузок</b> 🚀\n\n"
-                f"Продолжай делиться — каждый друг = ещё +5!",
+                f"🔥 <b>Твоя реферальная ссылка сработала!</b>\n\n"
+                f"Новый пользователь только что зарегистрировался по твоей ссылке.\n"
+                f"На счёт начислено <b>+5 бонусных загрузок</b> 🚀\n\n"
+                f"Чем больше друзей — тем больше халявных видео. Делись!",
             )
         except Exception:
-            pass  # Пользователь мог заблокировать бота — не критично
+            pass
 
     except Exception as e:
         logger.exception(f"Referral processing error for {message.from_user.id}: {e}")
@@ -190,25 +209,22 @@ async def btn_download(message: Message, user_db):
         is_premium = getattr(user_db, "is_premium", False)
 
         limit_line = (
-            "💎 Безлимитные загрузки (Premium)" if is_premium
-            else f"⬇️ Загрузок сегодня: <b>{used}/{limit}</b>"
+            "💎 <b>Безлимит</b> — Premium активен, качай сколько хочешь!" if is_premium
+            else f"📊 Осталось сегодня: <b>{max(0, limit - used)}/{limit}</b> загрузок"
         )
 
         await message.answer(
-            f"🔗 <b>Отправь ссылку на видео</b>\n\n"
-            f"Поддерживаемые платформы:\n"
-            f"🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n"
+            f"🔗 <b>Скидывай ссылку — скачаю мгновенно!</b>\n\n"
+            f"Работаю с:\n"
+            f"🎵 TikTok · 📸 Instagram Reels · 🐦 Twitter/X\n"
             f"🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n"
-            f"🎮 Twitch · 📌 Pinterest · 👻 Snapchat и другие!\n\n"
+            f"🎮 Twitch · 📌 Pinterest · 👻 Snapchat · и ещё 50+\n\n"
             f"{limit_line}\n\n"
-            f"Просто вставь ссылку — скачаю мгновенно ⚡"
+            f"<i>Просто вставь ссылку прямо сюда 👇</i>"
         )
     except Exception as e:
         logger.exception(f"btn_download error for {message.from_user.id}: {e}")
-        await message.answer(
-            "🔗 <b>Отправь ссылку на видео</b>\n\n"
-            "Просто вставь ссылку — скачаю мгновенно ⚡"
-        )
+        await message.answer("🔗 <b>Вставь ссылку на видео</b> — скачаю за секунды ⚡")
 
 
 # --------------------------------------------------------------------------- #
@@ -216,37 +232,27 @@ async def btn_download(message: Message, user_db):
 # --------------------------------------------------------------------------- #
 
 @router.message(F.text == "👤 Мой профиль")
+@router.message(Command("profile"))
 async def btn_profile(message: Message, user_db):
     try:
         ls = get_limit_service()
         used, limit = await ls.get_usage(message.from_user.id)
+        is_premium = getattr(user_db, "is_premium", False)
 
-        premium_status = "✅ Активен" if user_db.is_premium else "❌ Нет"
+        premium_status = "💎 Активен" if is_premium else "❌ Нет"
         premium_line = ""
-        if user_db.is_premium and getattr(user_db, "premium_until", None):
-            premium_line = f"\n📅 Действует до: <b>{user_db.premium_until.strftime('%d.%m.%Y')}</b>"
+        if is_premium and getattr(user_db, "premium_until", None):
+            premium_line = f" (до {user_db.premium_until.strftime('%d.%m.%Y')})"
 
-        reg_line = ""
-        if getattr(user_db, "registered_at", None):
-            reg_line = f"\n📆 В боте с: <b>{user_db.registered_at.strftime('%d.%m.%Y')}</b>"
-
-        bonus = 0
-        try:
-            raw = await ls.redis.get(f"referral_bonus:{message.from_user.id}")
-            bonus = int(raw or 0)
-        except Exception:
-            pass
-
-        ref_code = getattr(user_db, "referral_code", None) or "—"
+        ref_code = getattr(user_db, "referral_code", None) or str(message.from_user.id)
 
         await message.answer(
             f"👤 <b>Твой профиль</b>\n\n"
-            f"🆔 ID: <code>{message.from_user.id}</code>{reg_line}\n"
-            f"⬇️ Загрузок сегодня: <b>{used}/{limit}</b>\n"
-            f"🎁 Реферальных бонусов: <b>+{bonus}</b>\n"
+            f"🌍 Язык: <b>{getattr(user_db, 'language', 'ru').upper()}</b>\n"
+            f"📊 Загружено сегодня: <b>{used}/{limit}</b>\n"
             f"💎 Премиум: {premium_status}{premium_line}\n"
             f"👥 Приглашено друзей: <b>{getattr(user_db, 'referral_count', 0) or 0}</b>\n"
-            f"🔗 Твой код: <code>{ref_code}</code>"
+            f"🔗 Твой реферальный код: <code>{ref_code}</code>"
         )
     except Exception as e:
         logger.exception(f"btn_profile error for {message.from_user.id}: {e}")
@@ -264,7 +270,6 @@ async def cmd_referral(message: Message, user_db, bot: Bot):
         me = await bot.get_me()
         user_id = message.from_user.id
 
-        # Предпочитаем буквенный referral_code — выглядит аккуратнее
         ref_param = getattr(user_db, "referral_code", None) or str(user_id)
         ref_link = f"https://t.me/{me.username}?start={ref_param}"
         count = getattr(user_db, "referral_count", 0) or 0
@@ -279,10 +284,10 @@ async def cmd_referral(message: Message, user_db, bot: Bot):
 
         share_kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
-                text="📤 Поделиться ссылкой",
+                text="📤 Поделиться с другом",
                 url=(
                     f"https://t.me/share/url?url={ref_link}"
-                    f"&text=Скачивай видео с TikTok, Instagram и других платформ за секунды!"
+                    f"&text=🔥 Скачивай видео из TikTok, Instagram и 50+ платформ бесплатно!"
                 ),
             )
         ]])
@@ -291,9 +296,9 @@ async def cmd_referral(message: Message, user_db, bot: Bot):
             f"🔗 <b>Твоя реферальная ссылка:</b>\n"
             f"<code>{ref_link}</code>\n\n"
             f"👥 Приглашено друзей: <b>{count}</b>\n"
-            f"🎁 Накоплено бонусных загрузок: <b>+{bonus}</b>\n\n"
-            f"За каждого приглашённого — <b>+5 загрузок</b> навсегда!\n"
-            f"Чем больше друзей — тем больше видео 🚀",
+            f"🎁 Бонусных загрузок накоплено: <b>+{bonus}</b>\n\n"
+            f"💡 <b>За каждого друга — +5 загрузок навсегда!</b>\n"
+            f"Чем больше поделишься — тем больше качаешь бесплатно 🚀",
             reply_markup=share_kb,
         )
     except Exception as e:
@@ -315,9 +320,22 @@ async def cmd_premium(message: Message, gettext, user_db):
                 if getattr(user_db, "premium_until", None)
                 else "∞"
             )
-            await message.answer(gettext("premium_active", until=until))
+            await message.answer(
+                f"💎 <b>Premium активен до {until}</b>\n\n"
+                f"✅ Безлимитные загрузки\n"
+                f"✅ Без рекламы\n"
+                f"✅ Приоритетная обработка\n\n"
+                f"Наслаждайся! 🚀"
+            )
         else:
-            await message.answer(gettext("premium_info"))
+            await message.answer(
+                f"💎 <b>Premium — качай без ограничений</b>\n\n"
+                f"✅ Безлимитные загрузки каждый день\n"
+                f"✅ Ноль рекламы\n"
+                f"✅ Твои задачи в приоритете\n\n"
+                f"Напиши нам — расскажем об условиях 👇",
+                reply_markup=channel_and_support_kb(),
+            )
     except Exception as e:
         logger.exception(f"cmd_premium error for {message.from_user.id}: {e}")
         await message.answer("❌ Не удалось загрузить информацию о Премиуме.")
@@ -329,10 +347,6 @@ async def cmd_premium(message: Message, gettext, user_db):
 
 @router.message(Command("status"))
 async def cmd_status(message: Message, user_db):
-    """
-    Показывает текущий статус: лимит загрузок, Premium, длину очереди.
-    Полезна пользователям, которые думают, что задача «зависла».
-    """
     try:
         ls = get_limit_service()
         qs = get_queue_service()
@@ -340,18 +354,20 @@ async def cmd_status(message: Message, user_db):
         queue_len = await qs.get_queue_length()
         is_premium = getattr(user_db, "is_premium", False)
 
-        premium_line = "💎 Premium: ✅ Активен (безлимит)" if is_premium else f"📊 Лимит: <b>{used}/{limit}</b> загрузок сегодня"
-
+        premium_line = (
+            "💎 Premium: ✅ Безлимит активен" if is_premium
+            else f"📊 Лимит: <b>{used}/{limit}</b> загрузок сегодня"
+        )
         queue_status = (
-            "✅ Очередь пуста" if queue_len == 0
-            else f"⏳ В очереди: <b>{queue_len}</b> задач"
+            "✅ Очередь пуста — отвечу мгновенно!" if queue_len == 0
+            else f"⏳ Сейчас в очереди: <b>{queue_len}</b> задач"
         )
 
         await message.answer(
             f"📋 <b>Статус сервиса</b>\n\n"
             f"{premium_line}\n"
             f"{queue_status}\n\n"
-            f"Если видео долго не приходит — попробуй отправить ссылку ещё раз."
+            f"<i>Видео долго не приходит? Попробуй отправить ссылку ещё раз.</i>"
         )
     except Exception as e:
         logger.exception(f"cmd_status error for {message.from_user.id}: {e}")
@@ -377,7 +393,7 @@ async def cmd_set_language(message: Message, gettext):
             kb.append(row)
 
         await message.answer(
-            gettext("choose_language"),
+            "🌍 <b>Выбери язык интерфейса:</b>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
         )
     except Exception as e:
@@ -386,33 +402,57 @@ async def cmd_set_language(message: Message, gettext):
 
 
 # --------------------------------------------------------------------------- #
+#  Поддержка                                                                   #
+# --------------------------------------------------------------------------- #
+
+@router.message(F.text == "🆘 Поддержка")
+@router.message(Command("support"))
+async def cmd_support(message: Message):
+    """Показывает инструкцию по поддержке и предлагает написать напрямую."""
+    await message.answer(
+        f"🆘 <b>Служба поддержки</b>\n\n"
+        f"Есть вопрос, проблема или предложение?\n\n"
+        f"<b>Напиши следующим сообщением</b> — опиши ситуацию, "
+        f"и мы передадим её команде. Обычно отвечаем в течение нескольких часов.\n\n"
+        f"Или напиши напрямую: {SUPPORT_USERNAME}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="✍️ Написать в поддержку",
+                url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            )
+        ]]),
+    )
+
+
+# --------------------------------------------------------------------------- #
 #  Помощь                                                                      #
 # --------------------------------------------------------------------------- #
 
-@router.message(F.text == "ℹ️ Помощь")
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     await message.answer(
-        "ℹ️ <b>Помощь</b>\n\n"
-        "<b>Как скачать видео?</b>\n"
-        "1. Скопируй ссылку из приложения\n"
-        "2. Вставь её в этот чат\n"
-        "3. Получи видео без водяного знака!\n\n"
+        "ℹ️ <b>Как пользоваться ботом?</b>\n\n"
+        "<b>Всё просто:</b>\n"
+        "1️⃣ Скопируй ссылку на видео из приложения\n"
+        "2️⃣ Вставь её в этот чат\n"
+        "3️⃣ Получи видео без водяных знаков за секунды!\n\n"
         "<b>Поддерживаемые платформы:</b>\n"
         "🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n"
         "🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n"
-        "🎮 Twitch · 📌 Pinterest · 👻 Snapchat\n\n"
+        "🎮 Twitch · 📌 Pinterest · 👻 Snapchat · и 50+ других\n\n"
         "<b>Лимиты:</b>\n"
-        "• Бесплатно: 5 загрузок в день\n"
-        "• 💎 Премиум: безлимитно\n"
-        "• 👥 Реферал: +5 загрузок за каждого друга\n\n"
+        "• Бесплатно: <b>5 загрузок в день</b>\n"
+        "• 💎 Premium: <b>безлимитно</b>\n"
+        "• 👥 Реферал: <b>+5 загрузок</b> за каждого друга\n\n"
         "<b>Команды:</b>\n"
         "/start — главное меню\n"
         "/status — статус очереди и лимитов\n"
-        "/referral — реферальная ссылка\n"
-        "/premium — информация о Премиуме\n"
+        "/referral — твоя реферальная ссылка\n"
+        "/premium — информация о Premium\n"
+        "/support — написать в поддержку\n"
         "/set_language — сменить язык\n"
-        "/help — эта справка"
+        "/help — эта справка",
+        reply_markup=channel_kb(),
     )
 
 
@@ -421,35 +461,82 @@ async def cmd_help(message: Message):
 # --------------------------------------------------------------------------- #
 
 @router.message(F.text, ~F.text.startswith("/"))
-async def handle_url(message: Message, gettext, user_db):
+async def handle_url(message: Message, gettext, user_db, bot: Bot):
     text = message.text.strip()
 
     # Фильтр кнопок клавиатуры
     if text in _KEYBOARD_BUTTONS:
         return
 
-    # Пробуем извлечь URL из текста (на случай если пользователь добавил текст к ссылке)
+    # Пробуем извлечь URL
     url = _extract_url(text)
 
     if not url:
-        await message.answer(
-            "🤔 <b>Это не похоже на ссылку</b>\n\n"
-            "Отправь мне ссылку, начинающуюся с <code>http://</code> или <code>https://</code>.\n"
-            "Например: <code>https://www.tiktok.com/...</code>"
-        )
+        # Пользователь написал текст — предлагаем поддержку и перенаправляем
+        await _forward_to_support(message, bot, text)
         return
 
     platform = detect_platform(url)
     if not platform:
-        await message.answer(gettext("unsupported_url"))
+        await message.answer(
+            "🤔 <b>Платформа не поддерживается</b>\n\n"
+            "Работаю с TikTok, Instagram, Twitter/X, Reddit, Facebook, Vimeo, Twitch и 50+ другими.\n\n"
+            "Убедись, что ссылка ведёт на публичное видео и попробуй ещё раз.",
+            reply_markup=channel_kb(),
+        )
         return
 
     try:
         await get_queue_service().push_task(message.from_user.id, url, str(platform))
-        await message.answer(gettext("processing"))
+        await message.answer(
+            "⚡️ <b>Принял! Скачиваю...</b>\n\n"
+            "Видео будет здесь через несколько секунд. Не уходи далеко 😉"
+        )
     except Exception as e:
         logger.exception(f"Failed to push task for {message.from_user.id}: {e}")
         await message.answer(
-            "⚠️ <b>Сервис временно недоступен</b>\n\n"
-            "Не удалось поставить задачу в очередь. Попробуй через несколько секунд."
+            "⚠️ <b>Сервис временно перегружен</b>\n\n"
+            "Попробуй через несколько секунд — обычно это быстро проходит."
         )
+
+
+# --------------------------------------------------------------------------- #
+#  Форвардинг в поддержку                                                     #
+# --------------------------------------------------------------------------- #
+
+async def _forward_to_support(message: Message, bot: Bot, user_text: str):
+    """
+    Пересылает сообщение пользователя в SUPPORT_USERNAME с меткой отправителя.
+    Пользователь получает подтверждение.
+    """
+    user = message.from_user
+    username_part = f"@{user.username}" if user.username else f"id: <code>{user.id}</code>"
+    name_part = f"{user.first_name or ''} {user.last_name or ''}".strip() or "—"
+
+    try:
+        # Пытаемся найти chat_id поддержки через username
+        support_chat = await bot.get_chat(SUPPORT_USERNAME)
+        await bot.send_message(
+            support_chat.id,
+            f"📩 <b>Новое обращение в поддержку</b>\n\n"
+            f"👤 Имя: <b>{name_part}</b>\n"
+            f"🔗 Username: {username_part}\n"
+            f"🆔 ID: <code>{user.id}</code>\n\n"
+            f"<b>Сообщение:</b>\n{user_text}",
+        )
+        logger.info(f"Support message forwarded from {user.id} to {SUPPORT_USERNAME}")
+    except Exception as e:
+        logger.warning(f"Could not forward support message to {SUPPORT_USERNAME}: {e}")
+        # Даже если форвард не удался — пользователь получает ответ с прямой ссылкой
+
+    await message.answer(
+        f"✅ <b>Сообщение принято!</b>\n\n"
+        f"Команда поддержки скоро ответит тебе.\n\n"
+        f"Или напиши напрямую: {SUPPORT_USERNAME}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="✍️ Написать в поддержку",
+                url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            )
+        ]]),
+    )

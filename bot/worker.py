@@ -1,16 +1,9 @@
 """
 bot/worker.py
 
-Улучшения:
-- pop_task теперь блокирующий (BRPOP) — убран asyncio.sleep(1) в hot loop,
-  CPU-idle при пустой очереди
-- _rollback_limit использует LimitService.rollback (DRY)
-- Логика отправки видео вынесена в _send_video — меньше вложенности
-- Ошибка "file is too big" теперь также откатывает лимит
-- Корректная обработка TelegramRetryAfter: seek(0) перед повтором
-- Запись в БД: отдельный try/except не прерывает основной флоу
-- Таймаут на весь процесс скачивания через asyncio.wait_for
-- Все сообщения пользователю — на русском
+Изменения:
+- Все пользовательские сообщения переписаны на вирусный/энергичный русский
+- Логика без изменений (pop_task BRPOP, rollback, retry, etc.)
 """
 
 import asyncio
@@ -19,6 +12,7 @@ import random
 from typing import Optional
 
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter, TelegramBadRequest
+
 from aiogram.types import BufferedInputFile
 
 from bot.loader import bot
@@ -62,14 +56,12 @@ class Worker:
         while True:
             try:
                 if len(self._active_tasks) >= self.max_concurrent_tasks:
-                    # Ждём завершения хотя бы одной задачи
                     await asyncio.wait(
                         self._active_tasks,
                         return_when=asyncio.FIRST_COMPLETED,
                     )
                     continue
 
-                # Блокирующий pop с таймаутом 2 сек (нет busy loop)
                 task = await self.queue_service.pop_task(timeout=2)
                 if task:
                     t = asyncio.create_task(self.process_task(task))
@@ -122,10 +114,10 @@ class Worker:
             used, limit = await self.limit_service.get_usage(user_id)
             await self._safe_send(
                 user_id,
-                f"⏳ <b>Дневной лимит исчерпан</b>\n\n"
-                f"Сегодня ты уже скачал <b>{used}/{limit}</b> видео.\n\n"
-                f"💎 Оформи <b>Премиум</b> — безлимитные загрузки без ограничений.\n"
-                f"👥 Или пригласи друзей /referral — каждый друг = <b>+5 загрузок</b>!",
+                f"⏳ <b>Лимит на сегодня исчерпан!</b>\n\n"
+                f"Ты уже скачал <b>{used}/{limit}</b> видео сегодня — это максимум для бесплатного плана.\n\n"
+                f"💎 <b>Premium</b> — безлимитные загрузки каждый день без ограничений.\n"
+                f"👥 Или пригласи друга → /referral и получи <b>+5 загрузок</b> прямо сейчас!",
             )
             return
 
@@ -139,8 +131,9 @@ class Worker:
             await self.limit_service.rollback(user_id)
             await self._safe_send(
                 user_id,
-                f"{emoji} <b>Время ожидания истекло</b>\n\n"
-                "Скачивание заняло слишком долго. Попробуй ещё раз или выбери другое видео.",
+                f"{emoji} <b>Слишком долго!</b>\n\n"
+                "Скачивание зависло — скорее всего, сервер платформы лагает.\n"
+                "Попробуй ещё раз или выбери другое видео.",
             )
             return
 
@@ -151,13 +144,12 @@ class Worker:
 
         # ── 4. Отправка видео ─────────────────────────────────────────────
         caption = (
-            f"{emoji} <b>Готово!</b> Видео скачано 🎉\n\n"
-            f"📲 Поделись ботом с друзьями — /referral"
+            f"{emoji} <b>Готово! Лови своё видео 🎉</b>\n\n"
+            f"📲 Понравился бот? Поделись с друзьями → /referral"
         )
         sent = await self._send_video(user_id, video_bytes, caption)
 
         if not sent:
-            # Откатываем лимит — видео не получено пользователем
             await self.limit_service.rollback(user_id)
             return
 
@@ -177,10 +169,6 @@ class Worker:
     # ---------------------------------------------------------------------- #
 
     async def _send_video(self, user_id: int, video_bytes, caption: str) -> bool:
-        """
-        Отправляет видео пользователю.
-        Возвращает True при успехе, False при ошибке.
-        """
         async def _do_send(buf):
             buf.seek(0)
             file = BufferedInputFile(buf.read(), filename="video.mp4")
@@ -209,22 +197,29 @@ class Worker:
             if "file is too big" in err_lower:
                 await self._safe_send(
                     user_id,
-                    "😔 <b>Файл слишком большой</b>\n\n"
-                    "Telegram не принимает видео тяжелее 50 МБ.\n"
+                    "😔 <b>Файл слишком тяжёлый</b>\n\n"
+                    "Telegram не принимает видео тяжелее 50 МБ — это его ограничение, не моё.\n"
                     "Попробуй видео покороче или выбери другое качество.",
                 )
             elif "wrong file identifier" in err_lower:
-                await self._safe_send(user_id, "⚠️ Ошибка файла. Попробуй ещё раз.")
+                await self._safe_send(
+                    user_id,
+                    "⚠️ <b>Что-то пошло не так с файлом</b>\n\nПопробуй ещё раз — обычно помогает!"
+                )
             else:
                 logger.error(f"TelegramBadRequest for {user_id}: {e}")
-                await self._safe_send(user_id, "⚠️ Не удалось отправить видео. Попробуй позже.")
+                await self._safe_send(
+                    user_id,
+                    "⚠️ <b>Не удалось отправить видео</b>\n\nПопробуй позже — мы уже разбираемся."
+                )
             return False
 
         except Exception as e:
             logger.error(f"Error sending video to {user_id}: {e}")
             await self._safe_send(
                 user_id,
-                "⚠️ <b>Видео скачано, но не удалось отправить</b>\n\nПопробуй ещё раз позже.",
+                "⚠️ <b>Видео скачано, но не отправилось</b>\n\n"
+                "Попробуй отправить ссылку ещё раз — это должно сработать.",
             )
             return False
 
@@ -245,7 +240,6 @@ class Worker:
             last_error = error
             logger.warning(f"Attempt {attempt}/{settings.MAX_RETRIES} failed: {error}")
 
-            # Не повторяем при авторизационных / приватных ошибках
             if error == "auth_required" or (error and "Private" in error):
                 break
             if attempt < settings.MAX_RETRIES:
@@ -266,33 +260,33 @@ class Worker:
 
         if error == "auth_required":
             msg = (
-                "🔒 <b>Требуется авторизация</b>\n\n"
-                "Этот контент закрыт для скачивания.\n"
-                "Убедись, что ссылка ведёт на публичное видео."
+                "🔒 <b>Нужна авторизация</b>\n\n"
+                "Этот контент закрыт — я не могу его скачать.\n"
+                "Убедись, что ссылка ведёт на <b>публичное</b> видео и попробуй снова."
             )
         elif error and ("Private" in error or "private" in error):
             msg = (
                 "🔒 <b>Приватное видео</b>\n\n"
-                "Этот пост закрыт — скачать невозможно.\n"
+                "Этот пост скрыт от публики — скачать невозможно.\n"
                 "Попробуй другую ссылку."
             )
         elif error and ("unavailable" in error.lower() or "removed" in error.lower()):
             msg = (
                 "🗑 <b>Видео удалено или недоступно</b>\n\n"
-                "Контент больше не существует.\n"
-                "Возможно, автор удалил его."
+                "Похоже, автор удалил его или оно стало недоступным.\n"
+                "Ничего не могу поделать — попробуй другое видео."
             )
         elif error and "format" in error.lower():
             msg = (
-                f"{emoji} <b>Не удалось скачать</b>\n\n"
-                "Платформа изменила формат — отправь ссылку ещё раз.\n"
-                "Если ошибка повторяется — попробуй другое видео."
+                f"{emoji} <b>Платформа обновила защиту</b>\n\n"
+                "Мы уже работаем над исправлением — попробуй отправить ссылку ещё раз.\n"
+                "Если не помогает — попробуй другое видео."
             )
         else:
             msg = (
-                f"{emoji} <b>Не удалось скачать</b>\n\n"
-                "Что-то пошло не так. Проверь ссылку и попробуй снова.\n"
-                "Работают только публичные видео."
+                f"{emoji} <b>Не получилось скачать</b>\n\n"
+                "Что-то пошло не так на стороне платформы.\n"
+                "Проверь ссылку и попробуй ещё раз — работают только публичные видео."
             )
 
         await self._safe_send(user_id, msg)
