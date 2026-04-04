@@ -88,8 +88,9 @@ def main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📥 Скачать видео"), KeyboardButton(text="👤 Мой профиль")],
-            [KeyboardButton(text="🔗 Реферальная ссылка"), KeyboardButton(text="💎 Премиум")],
-            [KeyboardButton(text="🌍 Язык"), KeyboardButton(text="🆘 Поддержка")],
+            [KeyboardButton(text="🔗 Реферальная ссылка"), KeyboardButton(text="💎 Premium")],
+            [KeyboardButton(text="❤️ Донат"), KeyboardButton(text="🌍 Язык")],
+            [KeyboardButton(text="🆘 Поддержка")],
         ],
         resize_keyboard=True,
         input_field_placeholder="Вставь ссылку — скачаю за 5 сек ⚡",
@@ -100,7 +101,8 @@ _KEYBOARD_BUTTONS = frozenset({
     "📥 Скачать видео",
     "👤 Мой профиль",
     "🔗 Реферальная ссылка",
-    "💎 Премиум",
+    "💎 Premium",
+    "❤️ Донат",
     "🌍 Язык",
     "🆘 Поддержка",
 })
@@ -137,12 +139,16 @@ async def cmd_start(message: Message, gettext, user_db, bot: Bot):
 
     name = message.from_user.first_name or "друг"
     await message.answer(
-        f"⚡️ <b>Привет, {name}!</b>\n\n"
-        f"Я скачиваю видео без водяных знаков — быстро, чисто, бесплатно.\n\n"
-        f"<b>Просто скинь ссылку</b> из TikTok, Instagram, Twitter, Reddit, "
-        f"YouTube Shorts, Vimeo, Twitch и ещё 50+ платформ.\n\n"
-        f"Видео придёт прямо сюда через несколько секунд 🎬\n\n"
-        f"👇 Начни прямо сейчас — вставь ссылку в чат!",
+        f"👋 Привет, <b>{name}</b>!\n\n"
+        f"Отправь ссылку на видео — скачаю за секунды ⚡️\n\n"
+        f"<b>Поддерживаю:</b>\n"
+        f"🎵 TikTok · 📸 Instagram Reels · 🐦 Twitter/X\n"
+        f"🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n"
+        f"🎮 Twitch · 📌 Pinterest · 👻 Snapchat\n"
+        f"❤️ Likee · 🎤 Triller · 💼 Microsoft Stream\n"
+        f"▶️ YouTube Shorts · и ещё 50+ платформ!\n\n"
+        f"📲 Поделись с друзьями → /referral\n"
+        f"<i>(+5 загрузок за каждого приглашённого)</i>",
         reply_markup=main_keyboard(),
     )
 
@@ -310,11 +316,11 @@ async def cmd_referral(message: Message, user_db, bot: Bot):
 #  Премиум                                                                     #
 # --------------------------------------------------------------------------- #
 
-@router.message(F.text == "💎 Премиум")
+@router.message(F.text == "💎 Premium")
 @router.message(Command("premium"))
 async def cmd_premium(message: Message, gettext, user_db):
     try:
-        if user_db.is_premium:
+        if getattr(user_db, "is_premium", False):
             until = (
                 user_db.premium_until.strftime("%d.%m.%Y")
                 if getattr(user_db, "premium_until", None)
@@ -325,20 +331,62 @@ async def cmd_premium(message: Message, gettext, user_db):
                 f"✅ Безлимитные загрузки\n"
                 f"✅ Без рекламы\n"
                 f"✅ Приоритетная обработка\n\n"
-                f"Наслаждайся! 🚀"
+                f"Наслаждайся! 🚀",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="📣 Наш канал", url="https://t.me/downloaddq"),
+                ]]),
             )
-        else:
-            await message.answer(
-                f"💎 <b>Premium — качай без ограничений</b>\n\n"
-                f"✅ Безлимитные загрузки каждый день\n"
-                f"✅ Ноль рекламы\n"
-                f"✅ Твои задачи в приоритете\n\n"
-                f"Напиши нам — расскажем об условиях 👇",
-                reply_markup=channel_and_support_kb(),
-            )
+            return
+
+        tariffs_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="💳 Оформить подписку",
+                url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            )],
+            [InlineKeyboardButton(text="📣 Наш канал", url="https://t.me/downloaddq")],
+        ])
+
+        await message.answer(
+            "💎 <b>Premium — качай без ограничений</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "🗓 <b>5 дней</b>  →  <b>49 ₽</b>\n"
+            "🗓 <b>15 дней</b> →  <b>99 ₽</b>\n"
+            "🗓 <b>30 дней</b> →  <b>149 ₽</b>\n"
+            "🗓 <b>60 дней</b> →  <b>249 ₽</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "✅ Безлимитные загрузки каждый день\n"
+            "✅ Ноль рекламы\n"
+            "✅ Твои задачи в приоритете очереди\n\n"
+            f"👉 Для оплаты обратитесь к администратору {SUPPORT_USERNAME}",
+            reply_markup=tariffs_kb,
+        )
     except Exception as e:
         logger.exception(f"cmd_premium error for {message.from_user.id}: {e}")
-        await message.answer("❌ Не удалось загрузить информацию о Премиуме.")
+        await message.answer("❌ Не удалось загрузить тарифы. Попробуй позже.")
+
+
+# --------------------------------------------------------------------------- #
+#  Донат                                                                       #
+# --------------------------------------------------------------------------- #
+
+@router.message(F.text == "❤️ Донат")
+@router.message(Command("donate"))
+async def cmd_donate(message: Message):
+    donate_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="💸 Поддержать проект",
+            url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+        )],
+        [InlineKeyboardButton(text="📣 Наш канал", url="https://t.me/downloaddq")],
+    ])
+
+    await message.answer(
+        "❤️ <b>Поддержать проект</b>\n\n"
+        "Бот работает бесплатно — и это благодаря тем, кто поддерживает его развитие.\n\n"
+        "Если он тебе полезен — любой донат мотивирует делать его лучше и быстрее 🙏\n\n"
+        f"👉 Реквизиты и способы оплаты — у администратора {SUPPORT_USERNAME}",
+        reply_markup=donate_kb,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -448,7 +496,8 @@ async def cmd_help(message: Message):
         "/start — главное меню\n"
         "/status — статус очереди и лимитов\n"
         "/referral — твоя реферальная ссылка\n"
-        "/premium — информация о Premium\n"
+        "/premium — тарифы и подписка\n"
+        "/donate — поддержать проект\n"
         "/support — написать в поддержку\n"
         "/set_language — сменить язык\n"
         "/help — эта справка",
