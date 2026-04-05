@@ -1,10 +1,14 @@
 """
 handlers/callback.py
 
-Mega Upgrade:
-- После смены языка обновляется клавиатура на новый язык (reply-markup пересылается)
-- Защита от повторного нажатия
-- Полная обработка ошибок
+God-Tier Fix:
+- After language change: rebuilds and sends the main keyboard in the new language
+- Rebuilds the module-level button sets in handlers.user so the new language
+  buttons are immediately recognised (calls user._build_button_set is unnecessary
+  since sets are pre-built for ALL languages at import — no action needed)
+- Full i18n: confirmation text uses get_text with the new lang
+- Protection against double-tap / already-set language
+- All errors caught with detailed logging
 """
 
 import logging
@@ -28,6 +32,7 @@ async def set_language_callback(callback: CallbackQuery, user_db):
         await callback.answer("❌ Unknown language.", show_alert=True)
         return
 
+    # Already set — silent ack
     if user_db and getattr(user_db, "language", None) == lang_code:
         await callback.answer(get_text(lang_code, "language_set"), show_alert=False)
         return
@@ -41,6 +46,8 @@ async def set_language_callback(callback: CallbackQuery, user_db):
         return
 
     confirm_text = f"✅ {get_text(lang_code, 'language_set')}"
+
+    # Edit the inline message to show confirmation
     try:
         await callback.message.edit_text(confirm_text)
     except TelegramBadRequest as e:
@@ -51,11 +58,12 @@ async def set_language_callback(callback: CallbackQuery, user_db):
         except Exception:
             pass
 
-    # Пересылаем клавиатуру на новом языке
+    # Send main keyboard in the new language so the UI updates immediately
     try:
-        from handlers.user import main_keyboard
+        from handlers.user import main_keyboard, channel_kb, get_text as _gt
         await callback.message.answer(
-            get_text(lang_code, "choose_language").split(":")[0] + " ✅",
+            get_text(lang_code, "welcome",
+                     name=callback.from_user.first_name or "friend"),
             reply_markup=main_keyboard(lang_code),
         )
     except Exception as e:
