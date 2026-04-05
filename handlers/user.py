@@ -1,15 +1,14 @@
 """
 handlers/user.py
 
-God-Tier Refactor:
-- STRICT message priority: Commands → Menu Buttons → URL → Support fallback
+God-Tier Refactor + Fix:
+- STRICT message priority: Commands → Menu Buttons → URL → Show Main Menu (no support fallback)
 - Button texts pre-computed as module-level frozensets (fast O(1) lookup, no race)
 - Profile: "Something went wrong" eliminated — full try/except + graceful fallback
 - Premium: viral tariff card with per-lang pricing
 - i18n: every string uses get_text(); zero hard-coded Russian outside keys
-- Support fallback: ONLY reached when text is NOT a button AND NOT a URL
+- Support fallback REMOVED: now any non-URL, non-button, non-command text triggers main menu (like /start)
 - Inline "Наш канал" / "Our channel" attached to all key replies
-- Viral Russian copywriting throughout
 """
 
 from __future__ import annotations
@@ -38,7 +37,6 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 _URL_RE = re.compile(r"https?://[^\s]+", re.I)
-SUPPORT_USERNAME = "@YourBotPayments"
 CHANNEL_URL = "https://t.me/downloaddq"
 
 # Button key names used in every keyboard
@@ -67,9 +65,6 @@ def get_limit_service() -> LimitService:
 
 
 # ── Pre-computed button text sets (module-level, computed once on import) ─────
-# This guarantees O(1) lookup and fixes the root cause of buttons triggering
-# the support fallback.
-
 def _build_button_set() -> frozenset[str]:
     result: set[str] = set()
     for lang in languages:
@@ -78,10 +73,8 @@ def _build_button_set() -> frozenset[str]:
     return frozenset(result)
 
 
-# Built once at import time — never stale, never re-computed per request.
 _ALL_BUTTON_TEXTS: frozenset[str] = _build_button_set()
 
-# Per-button sets for individual handler F.func filters
 _BTN_DOWNLOAD = frozenset(get_text(lang, "btn_download") for lang in languages)
 _BTN_PROFILE  = frozenset(get_text(lang, "btn_profile")  for lang in languages)
 _BTN_REFERRAL = frozenset(get_text(lang, "btn_referral") for lang in languages)
@@ -92,7 +85,6 @@ _BTN_SUPPORT  = frozenset(get_text(lang, "btn_support")  for lang in languages)
 
 
 # ── Keyboards ────────────────────────────────────────────────────────────────
-
 def channel_kb(lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=get_text(lang, "btn_channel"), url=CHANNEL_URL),
@@ -104,7 +96,7 @@ def channel_and_support_kb(lang: str = "ru") -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=get_text(lang, "btn_channel"), url=CHANNEL_URL),
         InlineKeyboardButton(
             text=get_text(lang, "btn_contact_support"),
-            url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            url="https://t.me/YourBotPayments",  # direct link without @
         ),
     ]])
 
@@ -113,7 +105,7 @@ def contact_support_kb(lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(
             text=get_text(lang, "btn_contact_support"),
-            url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            url="https://t.me/YourBotPayments",
         ),
         InlineKeyboardButton(text=get_text(lang, "btn_channel"), url=CHANNEL_URL),
     ]])
@@ -123,7 +115,7 @@ def premium_buy_kb(lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text=get_text(lang, "btn_buy_tariffs"),
-            url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            url="https://t.me/YourBotPayments",
         )],
         [InlineKeyboardButton(text=get_text(lang, "btn_channel"), url=CHANNEL_URL)],
     ])
@@ -154,7 +146,7 @@ def donate_kb(lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="💸 " + get_text(lang, "btn_donate"),
-            url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}",
+            url="https://t.me/YourBotPayments",
         )],
         [InlineKeyboardButton(text=get_text(lang, "btn_channel"), url=CHANNEL_URL)],
     ])
@@ -188,7 +180,6 @@ def main_keyboard(lang: str = "ru") -> ReplyKeyboardMarkup:
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
 def _extract_url(text: str) -> str | None:
     match = _URL_RE.search(text)
     return match.group(0).rstrip(".,!?)>»") if match else None
@@ -199,7 +190,6 @@ def _get_lang(user_db) -> str:
 
 
 # ── /start ───────────────────────────────────────────────────────────────────
-
 @router.message(CommandStart())
 async def cmd_start(message: Message, user_db, bot: Bot):
     lang = _get_lang(user_db)
@@ -264,7 +254,6 @@ async def _process_referral(
 
 
 # ── Button: Download ─────────────────────────────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_DOWNLOAD))
 async def btn_download(message: Message, user_db):
     lang = _get_lang(user_db)
@@ -289,26 +278,21 @@ async def btn_download(message: Message, user_db):
 
 
 # ── Button: Profile ──────────────────────────────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_PROFILE))
 @router.message(Command("profile"))
 async def btn_profile(message: Message, user_db, bot: Bot):
-    # Use 'lc' (language code) as the local variable so it never collides
-    # with the {lang} placeholder in the profile_text translation template.
     lc = _get_lang(user_db)
     try:
         ls = get_limit_service()
         used, limit = await ls.get_usage(message.from_user.id)
         is_premium = getattr(user_db, "is_premium", False)
 
-        # Bot username (cached inside aiogram session, fast)
         try:
             me = await bot.get_me()
             bot_username = me.username or "YourBot"
         except Exception:
             bot_username = "YourBot"
 
-        # Premium status line
         if is_premium and getattr(user_db, "premium_until", None):
             until_str = user_db.premium_until.strftime("%d.%m.%Y")
             status_text = get_text(lc, "premium_status_active", until=until_str)
@@ -320,15 +304,12 @@ async def btn_profile(message: Message, user_db, bot: Bot):
         ref_param = getattr(user_db, "referral_code", None) or str(message.from_user.id)
         ref_count = int(getattr(user_db, "referral_count", 0) or 0)
 
-        # Language emoji + name displayed inside the profile card
         lang_emoji = {
             "ru": "🇷🇺", "en": "🇬🇧", "es": "🇪🇸", "pt": "🇧🇷",
             "de": "🇩🇪", "fr": "🇫🇷", "hi": "🇮🇳", "ar": "🇸🇦",
         }.get(lc, "🌍")
         lang_label = f"{lang_emoji} {languages.get(lc, lc.upper())}"
 
-        # 'lang' kwarg matches the {lang} placeholder in profile_text —
-        # no conflict because the local language-code var is now named 'lc'.
         await message.answer(
             get_text(
                 lc, "profile_text",
@@ -351,7 +332,6 @@ async def btn_profile(message: Message, user_db, bot: Bot):
 
 
 # ── Button: Referral ─────────────────────────────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_REFERRAL))
 @router.message(Command("referral"))
 async def cmd_referral(message: Message, user_db, bot: Bot):
@@ -387,7 +367,6 @@ async def cmd_referral(message: Message, user_db, bot: Bot):
 
 
 # ── Button: Premium ──────────────────────────────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_PREMIUM))
 @router.message(Command("premium"))
 async def cmd_premium(message: Message, user_db):
@@ -415,14 +394,13 @@ async def cmd_premium(message: Message, user_db):
 
 
 # ── Button: Donate ───────────────────────────────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_DONATE))
 @router.message(Command("donate"))
 async def cmd_donate(message: Message, user_db):
     lang = _get_lang(user_db)
     try:
         await message.answer(
-            get_text(lang, "donate_text", support=SUPPORT_USERNAME),
+            get_text(lang, "donate_text", support="@YourBotPayments"),
             reply_markup=donate_kb(lang),
         )
     except Exception as e:
@@ -431,7 +409,6 @@ async def cmd_donate(message: Message, user_db):
 
 
 # ── Button: Language ─────────────────────────────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_LANGUAGE))
 @router.message(Command("set_language"))
 async def cmd_set_language(message: Message, user_db):
@@ -459,7 +436,6 @@ async def cmd_set_language(message: Message, user_db):
 
 
 # ── Button: Support (explicit button press) ───────────────────────────────────
-
 @router.message(F.text.func(lambda t: t in _BTN_SUPPORT))
 @router.message(Command("support"))
 async def cmd_support(message: Message, user_db):
@@ -475,7 +451,6 @@ async def cmd_support(message: Message, user_db):
 
 
 # ── /help ────────────────────────────────────────────────────────────────────
-
 @router.message(Command("help"))
 async def cmd_help(message: Message, user_db):
     lang = _get_lang(user_db)
@@ -490,7 +465,6 @@ async def cmd_help(message: Message, user_db):
 
 
 # ── /status ──────────────────────────────────────────────────────────────────
-
 @router.message(Command("status"))
 async def cmd_status(message: Message, user_db):
     lang = _get_lang(user_db)
@@ -521,27 +495,22 @@ async def cmd_status(message: Message, user_db):
         await message.answer(get_text(lang, "error_generic"))
 
 
-# ── Main message handler: URL → download | text → support fallback ────────────
-#
-# PRIORITY ORDER enforced by aiogram router registration:
-#   1. CommandStart, Command handlers (registered before this router)
-#   2. Button text handlers (registered above via F.text.func)
-#   3. THIS handler — only fires if nothing above matched
-#
-# Additional safety: we double-check against _ALL_BUTTON_TEXTS so even if
-# somehow a button text slips through (edge case: language changed mid-session),
-# it is silently ignored and won't trigger a support forward.
-
+# ── Main message handler: URL → download | otherwise → main menu ─────────────
+# PRIORITY ORDER:
+#   1. Commands
+#   2. Button texts (handlers above)
+#   3. THIS handler
+# If text is a valid URL → download
+# Else → show main menu (like /start), NOT forward to support.
 @router.message(F.text, ~F.text.startswith("/"))
 async def handle_text(message: Message, user_db, bot: Bot):
     text = (message.text or "").strip()
     lang = _get_lang(user_db)
 
-    # Guard: never treat any known button text as a support message
+    # Never treat any known button text as a URL
     if text in _ALL_BUTTON_TEXTS:
         return
 
-    # ── Priority 2: URL detection ────────────────────────────────────────────
     url = _extract_url(text)
     if url:
         platform = detect_platform(url)
@@ -562,41 +531,17 @@ async def handle_text(message: Message, user_db, bot: Bot):
             await message.answer(get_text(lang, "error_generic"))
         return
 
-    # ── Priority 3: Support fallback ─────────────────────────────────────────
-    await _forward_to_support(message, bot, text, lang)
-
-
-async def _forward_to_support(message: Message, bot: Bot, user_text: str, lang: str):
-    """Forward user message to admin; confirm to user; re-show main keyboard."""
-    user = message.from_user
-    username_part = (
-        f"@{user.username}" if user.username else f"id: <code>{user.id}</code>"
-    )
-    name_part = f"{user.first_name or ''} {user.last_name or ''}".strip() or "—"
-
-    # Forward to support (best-effort, non-blocking)
-    try:
-        support_chat = await bot.get_chat(SUPPORT_USERNAME)
-        await bot.send_message(
-            support_chat.id,
-            f"📩 <b>Новое обращение в поддержку</b>\n\n"
-            f"👤 Имя: <b>{name_part}</b>\n"
-            f"🔗 Username: {username_part}\n"
-            f"🆔 ID: <code>{user.id}</code>\n"
-            f"🌍 Язык: {lang}\n\n"
-            f"<b>Сообщение:</b>\n{user_text}",
-        )
-        logger.info(f"Support message forwarded from {user.id}")
-    except Exception as e:
-        logger.warning(f"Could not forward support message to {SUPPORT_USERNAME}: {e}")
-
-    # Confirm to user
+    # ── Not a URL, not a button, not a command → show main menu (like /start)
+    name = message.from_user.first_name or ("друг" if lang == "ru" else "friend")
     try:
         await message.answer(
-            get_text(lang, "support_accepted", support=SUPPORT_USERNAME),
-            reply_markup=contact_support_kb(lang),
+            get_text(lang, "welcome", name=name),
+            reply_markup=main_keyboard(lang),
         )
-        # Re-show main keyboard so user doesn't feel lost
-        await message.answer("👇", reply_markup=main_keyboard(lang))
+        await message.answer(
+            get_text(lang, "channel_subscribe"),
+            reply_markup=channel_kb(lang),
+        )
     except Exception as e:
-        logger.error(f"Could not send support_accepted to {user.id}: {e}")
+        logger.exception(f"handle_text fallback error for {message.from_user.id}: {e}")
+        await message.answer(get_text(lang, "error_generic"))
