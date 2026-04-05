@@ -440,15 +440,19 @@ class DownloadRepo:
 class AdRepo:
     """Репозиторий для работы с таблицей ads."""
 
-    async def add_ad(self, text: str):
-        """Добавляет новое рекламное объявление."""
+    async def add_ad(self, text: str, position: str = "after_download"):
+        """Добавляет новое рекламное объявление с указанием позиции показа."""
         def _add():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("INSERT INTO ads (message_text) VALUES (%s)", (text,))
+                    cur.execute(
+                        "INSERT INTO ads (message_text, position) VALUES (%s, %s)",
+                        (text, position)
+                    )
                     conn.commit()
 
         await run_sync(_add)
+
 
     async def get_active_ads(self):
         """Возвращает активные рекламные объявления."""
@@ -609,9 +613,18 @@ async def init_db():
                         id           SERIAL PRIMARY KEY,
                         message_text TEXT    NOT NULL,
                         is_active    BOOLEAN DEFAULT TRUE NOT NULL,
+                        position     VARCHAR(30) DEFAULT 'after_download' NOT NULL,
                         created_at   TIMESTAMP DEFAULT NOW() NOT NULL
                     )
                 """)
+                # Migration: add position column to existing ads tables
+                try:
+                    cur.execute(
+                        "ALTER TABLE ads ADD COLUMN IF NOT EXISTS "
+                        "position VARCHAR(30) DEFAULT 'after_download' NOT NULL"
+                    )
+                except Exception:
+                    conn.rollback()
 
                 # ── Таблица истории рассылок ───────────────────────────────
                 cur.execute("""

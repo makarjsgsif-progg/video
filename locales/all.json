@@ -42,7 +42,8 @@
     "channel_subscribe": "📣 Подпишись на наш канал — там обновления, фишки и розыгрыши:",
     "error_generic": "❌ Что-то пошло не так. Попробуй позже.",
     "throttle_message": "⏳ Слишком много запросов. Подожди немного.",
-    "throttle_callback": "⏳ Слишком часто. Подожди немного."
+    "throttle_callback": "⏳ Слишком часто. Подожди немного.",
+    "support_cta": "👇 Нажми кнопку — напишем тебе в течение нескольких часов:"
   },
   "en": {
     "welcome": "⚡️ Hey, <b>{name}</b>!\n\nDrop any video link — I'll grab it in seconds, no watermarks, no BS.\n\n<b>Works with:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · and 50+ more!\n\n📲 Invite friends → /referral <i>(+5 downloads per friend!)</i>",
@@ -87,7 +88,8 @@
     "channel_subscribe": "📣 Subscribe to our channel — updates, tips and giveaways:",
     "error_generic": "❌ Something went wrong. Please try again later.",
     "throttle_message": "⏳ Too many requests. Please wait a moment.",
-    "throttle_callback": "⏳ Too fast. Please wait a moment."
+    "throttle_callback": "⏳ Too fast. Please wait a moment.",
+    "support_cta": "👇 Tap the button — we'll get back to you within a few hours:"
   },
   "es": {
     "welcome": "⚡️ ¡Hola, <b>{name}</b>!\n\nEnvíame un enlace de vídeo — lo descargo en segundos, sin marcas de agua.\n\n<b>Compatible con:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · ¡y más de 50!\n\n📲 Invita amigos → /referral <i>(+5 descargas por amigo!)</i>",
@@ -132,7 +134,8 @@
     "channel_subscribe": "📣 Suscríbete a nuestro canal:",
     "error_generic": "❌ Algo salió mal. Inténtalo más tarde.",
     "throttle_message": "⏳ Demasiadas solicitudes. Espera un momento.",
-    "throttle_callback": "⏳ Demasiado rápido. Espera un momento."
+    "throttle_callback": "⏳ Demasiado rápido. Espera un momento.",
+    "support_cta": "👇 Pulsa el botón — te responderemos en pocas horas:"
   },
   "pt": {
     "welcome": "⚡️ Olá, <b>{name}</b>!\n\nEnvie um link de vídeo — baixo em segundos, sem marcas d'água.\n\n<b>Suportado:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · e mais de 50!\n\n📲 Convide amigos → /referral <i>(+5 downloads por amigo!)</i>",
@@ -177,7 +180,8 @@
     "channel_subscribe": "📣 Inscreva-se no nosso canal:",
     "error_generic": "❌ Algo deu errado. Tente novamente mais tarde.",
     "throttle_message": "⏳ Muitas solicitações. Aguarde um momento.",
-    "throttle_callback": "⏳ Rápido demais. Aguarde um momento."
+    "throttle_callback": "⏳ Rápido demais. Aguarde um momento.",
+    "support_cta": "👇 Toque o botão — responderemos em poucas horas:"
   },
   "de": {
     "welcome": "⚡️ Hey, <b>{name}</b>!\n\nSchick mir einen Video-Link — ich lade ihn in Sekunden herunter, ohne Wasserzeichen.\n\n<b>Unterstützt:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · und 50+ mehr!\n\n📲 Lade Freunde ein → /referral <i>(+5 Downloads pro Freund!)</i>",
@@ -222,7 +226,8 @@
     "channel_subscribe": "📣 Abonniere unseren Kanal:",
     "error_generic": "❌ Etwas ist schief gelaufen. Versuche es später erneut.",
     "throttle_message": "⏳ Zu viele Anfragen. Warte einen Moment.",
-    "throttle_callback": "⏳ Zu schnell. Warte einen Moment."
+    "throttle_callback": "⏳ Zu schnell. Warte einen Moment.",
+    "support_cta": "👇 Tippe den Button — wir melden uns innerhalb weniger Stunden:"
   },
   "fr": {
     "welcome": "⚡️ Salut, <b>{name}</b>!\n\nEnvoie-moi un lien vidéo — je le télécharge en secondes, sans filigrane.\n\n<b>Compatible avec:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · et 50+ autres!\n\n📲 Invite des amis → /referral <i>(+5 téléchargements par ami!)</i>",
@@ -267,7 +272,8 @@
     "channel_subscribe": "📣 Abonne-toi à notre chaîne:",
     "error_generic": "❌ Quelque chose s'est mal passé. Réessaie plus tard.",
     "throttle_message": "⏳ Trop de requêtes. Attends un moment.",
-    "throttle_callback": "⏳ Trop rapide. Attends un moment."
+    "throttle_callback": "⏳ Trop rapide. Attends un moment.",
+    "support_cta": "👇 Appuie sur le bouton — on te répond dans quelques heures:"
   },
   "hi": {
     "welcome": "⚡️ नमस्ते, <b>{name}</b>!\n\nकोई भी वीडियो लिंक भेजें — सेकंडों में डाउनलोड, बिना वॉटरमार्क!\n\n<b>सपोर्टेड:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · और 50+ अन्य!\n\n📲 दोस्तों को आमंत्रित करें → /referral <i>(प्रति मित्र +5 डाउनलोड!)</i>",
@@ -312,7 +318,8 @@
     "channel_subscribe": "📣 हमारे चैनल को सब्सक्राइब करें:",
     "error_generic": "❌ कुछ गलत हो गया। बाद में पुनः प्रयास करें।",
     "throttle_message": "⏳ बहुत अधिक अनुरोध। थोड़ा इंतज़ार करें।",
-    "throttle_callback": "⏳ बहुत तेज़। थोड़ा इंतज़ार करें।"
+    "throttle_callback": "⏳ बहुत तेज़। थोड़ा इंतज़ार करें।",
+    "support_cta": "👇 बटन दबाएं — हम कुछ घंटों में जवाब देंगे:"
   },
   "ar": {
     "welcome": "⚡️ مرحباً، <b>{name}</b>!\n\nأرسل رابط فيديو — سأحمّله في ثوانٍ بدون علامة مائية!\n\n<b>يدعم:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · وأكثر من 50 منصة!\n\n📲 ادعُ أصدقاء → /referral <i>(+5 تحميلات لكل صديق!)</i>",
@@ -357,6 +364,7 @@
     "channel_subscribe": "📣 اشترك في قناتنا:",
     "error_generic": "❌ حدث خطأ ما. حاول مرة أخرى لاحقاً.",
     "throttle_message": "⏳ طلبات كثيرة جداً. انتظر لحظة.",
-    "throttle_callback": "⏳ سريع جداً. انتظر لحظة."
+    "throttle_callback": "⏳ سريع جداً. انتظر لحظة.",
+    "support_cta": "👇 اضغط الزر — سنرد عليك خلال ساعات:"
   }
 }

@@ -70,3 +70,11 @@ async def set_language_callback(callback: CallbackQuery, user_db):
         logger.debug(f"Failed to send new keyboard after lang change: {e}")
 
     await callback.answer()
+
+
+@router.callback_query(F.data == "noop_premium")
+async def noop_premium_callback(callback: CallbackQuery, user_db):
+    """Inline button on the delay message — redirects to premium info."""
+    from handlers.user import cmd_premium
+    await callback.answer()
+    await cmd_premium(callback.message, user_db)

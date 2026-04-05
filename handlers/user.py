@@ -463,15 +463,15 @@ async def cmd_set_language(message: Message, user_db):
 @router.message(F.text.func(lambda t: t in _BTN_SUPPORT))
 @router.message(Command("support"))
 async def cmd_support(message: Message, user_db):
-    lang = _get_lang(user_db)
+    lc = _get_lang(user_db)
     try:
         await message.answer(
-            get_text(lang, "support_prompt", support=SUPPORT_USERNAME),
-            reply_markup=contact_support_kb(lang),
+            get_text(lc, "support_cta"),
+            reply_markup=contact_support_kb(lc),
         )
     except Exception as e:
         logger.exception(f"cmd_support error for {message.from_user.id}: {e}")
-        await message.answer(get_text(lang, "error_generic"))
+        await message.answer(get_text(lc, "error_generic"))
 
 
 # ── /help ────────────────────────────────────────────────────────────────────

@@ -22,6 +22,10 @@ from config.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Artificial delay (seconds) shown to free users before download starts.
+# Creates perceived value gap vs Premium ("instant").
+FREE_USER_DELAY = 15  # seconds
+
 PLATFORM_EMOJI = {
     "tiktok": "🎵",
     "instagram": "📸",
@@ -295,18 +299,23 @@ class Worker:
     #  Вспомогательные методы                                                 #
     # ---------------------------------------------------------------------- #
 
-    async def _send_ad_if_available(self, user_id: int):
+    async def _send_ad_if_available(self, user_id: int, position: str = "after_download"):
         try:
             ads = await self.ad_service.get_active_ads()
-            if ads:
-                ad = random.choice(ads)
+            # Filter by position (default "after_download" for ads without position field)
+            filtered = [
+                a for a in ads
+                if getattr(a, "position", "after_download") == position
+            ]
+            if filtered:
+                ad = random.choice(filtered)
                 await self._safe_send(user_id, f"📢 {ad.message_text}")
         except Exception as e:
             logger.debug(f"Ad send failed for {user_id}: {e}")
 
-    async def _safe_send(self, user_id: int, text: str):
+    async def _safe_send(self, user_id: int, text: str, kb=None):
         try:
-            await bot.send_message(user_id, text)
+            await bot.send_message(user_id, text, reply_markup=kb)
         except TelegramForbiddenError:
             logger.debug(f"User {user_id} blocked the bot (safe_send).")
         except Exception as e:

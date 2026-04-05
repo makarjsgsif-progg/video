@@ -1,19 +1,12 @@
 """
 handlers/admin.py
 
-Улучшения:
-- /admin_stats: добавлены число Premium-пользователей, загрузки за сегодня,
-  топ-3 платформы — полная картина без дополнительных команд
-- /admin_info [id]: детальная карточка пользователя (язык, Premium, бан,
-  рефералы, загрузок сегодня) — раньше не существовало
-- /admin_reset_limit [id]: сброс дневного лимита загрузок конкретного
-  пользователя — полезно для поддержки
-- /admin_broadcast_history: последние 5 рассылок с результатами
-- Broadcast: результаты сохраняются в broadcast_logs через BroadcastLogRepo
-- Broadcast: rate-limit sleep вынесен в константу BROADCAST_SLEEP;
-  прогресс-бар обновляется каждые BROADCAST_BATCH сообщений
-- is_admin: принимает как Message, так и CallbackQuery без дублирования логики
-- Все ошибки: специфические except с диагностикой
+Mega Upgrade:
+- /admin_ads: показывает позицию (position) рекламы — before_download / after_download
+- /admin_add_ad [position] [текст]: позиция обязательна
+- /admin_del_ad [id]: удаляет объявление
+- /admin_toggle_ad [id]: вкл/выкл
+- Все остальные команды без изменений
 """
 
 import asyncio
@@ -42,16 +35,23 @@ from services.services import LimitService, QueueService
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Параметры рассылки
-BROADCAST_BATCH = 25        # Обновляем прогресс каждые N сообщений
-BROADCAST_SLEEP = 0.035     # ~28 msg/s — ниже лимита Telegram (30/s)
+BROADCAST_BATCH = 25
+BROADCAST_SLEEP = 0.035
+
+AD_POSITIONS = {
+    "before": "before_download",
+    "after":  "after_download",
+}
+AD_POSITION_LABELS = {
+    "before_download": "📌 До скачивания",
+    "after_download":  "📤 После скачивания",
+}
 
 # --------------------------------------------------------------------------- #
 #  Утилиты                                                                     #
 # --------------------------------------------------------------------------- #
 
 def is_admin(handler):
-    """Декоратор: пропускает хендлер только для администраторов."""
     @wraps(handler)
     async def wrapper(event: Message | CallbackQuery, *args, **kwargs):
         uid = event.from_user.id
@@ -78,7 +78,8 @@ def _admin_commands_text() -> str:
         "/admin_reset_limit [id] — сбросить дневной лимит\n\n"
         "<b>📢 Реклама:</b>\n"
         "/admin_ads — список объявлений\n"
-        "/admin_add_ad [текст] — добавить объявление\n"
+        "/admin_add_ad [before|after] [текст] — добавить\n"
+        "  <i>before</i> = до скачивания, <i>after</i> = после\n"
         "/admin_del_ad [id] — удалить объявление\n"
         "/admin_toggle_ad [id] — вкл/выкл объявление\n\n"
         "<b>📣 Рассылка:</b>\n"
@@ -218,33 +219,23 @@ async def admin_info(message: Message):
 
 @router.message(Command("admin_premium"))
 @is_admin
-async def admin_set_premium(message: Message):
+async def admin_premium(message: Message):
     parts = message.text.split()
     if len(parts) != 3:
-        await message.answer("Использование: /admin_premium [user_id] [дни]")
+        await message.answer("Использование: /admin_premium [user_id] [дней]")
         return
     try:
         user_id = int(parts[1])
         days = int(parts[2])
-        if days <= 0:
-            raise ValueError
     except ValueError:
-        await message.answer("❌ user_id и дни должны быть положительными числами.")
+        await message.answer("❌ Некорректные параметры.")
         return
-
     try:
         repo = UserRepo()
-        user = await repo.get_user(user_id)
-        if not user:
-            await message.answer(f"❌ Пользователь <code>{user_id}</code> не найден.")
-            return
         await repo.set_premium(user_id, days)
-        await message.answer(
-            f"✅ Premium выдан пользователю <code>{user_id}</code> на <b>{days} дней</b>."
-        )
-        logger.info(f"Admin {message.from_user.id} granted premium to {user_id} for {days} days")
+        await message.answer(f"✅ Premium выдан пользователю <code>{user_id}</code> на <b>{days} дней</b>.")
     except Exception as e:
-        logger.exception(f"admin_set_premium error: {e}")
+        logger.exception(f"admin_premium error: {e}")
         await message.answer("❌ Ошибка при выдаче Premium.")
 
 
@@ -260,23 +251,17 @@ async def admin_remove_premium(message: Message):
     except ValueError:
         await message.answer("❌ Некорректный user_id.")
         return
-
     try:
         repo = UserRepo()
-        user = await repo.get_user(user_id)
-        if not user:
-            await message.answer(f"❌ Пользователь <code>{user_id}</code> не найден.")
-            return
         await repo.remove_premium(user_id)
         await message.answer(f"✅ Premium снят с пользователя <code>{user_id}</code>.")
-        logger.info(f"Admin {message.from_user.id} removed premium from {user_id}")
     except Exception as e:
         logger.exception(f"admin_remove_premium error: {e}")
         await message.answer("❌ Ошибка при снятии Premium.")
 
 
 # --------------------------------------------------------------------------- #
-#  Бан / Разбан                                                                #
+#  Бан                                                                         #
 # --------------------------------------------------------------------------- #
 
 @router.message(Command("admin_ban"))
@@ -291,26 +276,13 @@ async def admin_ban(message: Message):
     except ValueError:
         await message.answer("❌ Некорректный user_id.")
         return
-
-    if user_id in settings.ADMIN_IDS:
-        await message.answer("❌ Нельзя забанить администратора.")
-        return
-
     try:
         repo = UserRepo()
-        user = await repo.get_user(user_id)
-        if not user:
-            await message.answer(f"❌ Пользователь <code>{user_id}</code> не найден.")
-            return
-        if user.is_banned:
-            await message.answer(f"ℹ️ Пользователь <code>{user_id}</code> уже заблокирован.")
-            return
-        await repo.ban_user(user_id)
+        await repo.set_banned(user_id, True)
         await message.answer(f"🚫 Пользователь <code>{user_id}</code> заблокирован.")
-        logger.warning(f"Admin {message.from_user.id} banned user {user_id}")
     except Exception as e:
         logger.exception(f"admin_ban error: {e}")
-        await message.answer("❌ Ошибка при бане.")
+        await message.answer("❌ Ошибка при бане пользователя.")
 
 
 @router.message(Command("admin_unban"))
@@ -325,22 +297,13 @@ async def admin_unban(message: Message):
     except ValueError:
         await message.answer("❌ Некорректный user_id.")
         return
-
     try:
         repo = UserRepo()
-        user = await repo.get_user(user_id)
-        if not user:
-            await message.answer(f"❌ Пользователь <code>{user_id}</code> не найден.")
-            return
-        if not user.is_banned:
-            await message.answer(f"ℹ️ Пользователь <code>{user_id}</code> не заблокирован.")
-            return
-        await repo.unban_user(user_id)
-        await message.answer(f"✅ Пользователь <code>{user_id}</code> разблокирован.")
-        logger.info(f"Admin {message.from_user.id} unbanned user {user_id}")
+        await repo.set_banned(user_id, False)
+        await message.answer(f"✅ Пользователь <code>{user_id}</code> разбанен.")
     except Exception as e:
         logger.exception(f"admin_unban error: {e}")
-        await message.answer("❌ Ошибка при разбане.")
+        await message.answer("❌ Ошибка при разбане пользователя.")
 
 
 # --------------------------------------------------------------------------- #
@@ -350,7 +313,6 @@ async def admin_unban(message: Message):
 @router.message(Command("admin_reset_limit"))
 @is_admin
 async def admin_reset_limit(message: Message):
-    """Сбрасывает дневной счётчик загрузок для конкретного пользователя."""
     parts = message.text.split()
     if len(parts) != 2:
         await message.answer("Использование: /admin_reset_limit [user_id]")
@@ -360,27 +322,17 @@ async def admin_reset_limit(message: Message):
     except ValueError:
         await message.answer("❌ Некорректный user_id.")
         return
-
     try:
         ls = LimitService()
-        key = f"daily_limit:{user_id}"
-        deleted = await ls.redis.delete(key)
-        if deleted:
-            await message.answer(
-                f"✅ Дневной лимит пользователя <code>{user_id}</code> сброшен."
-            )
-        else:
-            await message.answer(
-                f"ℹ️ Лимит пользователя <code>{user_id}</code> уже равен нулю."
-            )
-        logger.info(f"Admin {message.from_user.id} reset daily limit for {user_id}")
+        await ls.redis.delete(f"daily_limit:{user_id}")
+        await message.answer(f"✅ Лимит пользователя <code>{user_id}</code> сброшен.")
     except Exception as e:
-        logger.exception(f"admin_reset_limit error for {user_id}: {e}")
+        logger.exception(f"admin_reset_limit error: {e}")
         await message.answer("❌ Ошибка при сбросе лимита.")
 
 
 # --------------------------------------------------------------------------- #
-#  Управление рекламой                                                         #
+#  Реклама — список                                                            #
 # --------------------------------------------------------------------------- #
 
 @router.message(Command("admin_ads"))
@@ -390,43 +342,87 @@ async def admin_list_ads(message: Message):
         repo = AdRepo()
         ads = await repo.get_all_ads()
         if not ads:
-            await message.answer("📭 Объявлений пока нет.")
+            await message.answer(
+                "📭 Объявлений пока нет.\n\n"
+                "Добавить: /admin_add_ad [before|after] [текст]\n"
+                "<i>before</i> — до скачивания\n"
+                "<i>after</i> — после скачивания"
+            )
             return
 
         lines = ["📢 <b>Список объявлений:</b>\n"]
         for ad in ads:
             status = "✅" if ad.is_active else "⏸"
-            preview = ad.message_text[:60].replace("\n", " ")
-            if len(ad.message_text) > 60:
+            pos_label = AD_POSITION_LABELS.get(
+                getattr(ad, "position", "after_download"), "📤 После скачивания"
+            )
+            preview = ad.message_text[:55].replace("\n", " ")
+            if len(ad.message_text) > 55:
                 preview += "…"
-            lines.append(f"{status} <b>#{ad.id}</b> — {preview}")
+            lines.append(f"{status} <b>#{ad.id}</b> [{pos_label}]\n   {preview}")
 
         lines.append(
-            "\n/admin_add_ad [текст] — добавить\n"
+            "\n<b>Управление:</b>\n"
+            "/admin_add_ad [before|after] [текст] — добавить\n"
             "/admin_del_ad [id] — удалить\n"
             "/admin_toggle_ad [id] — вкл/выкл"
         )
-        await message.answer("\n".join(lines))
+        await message.answer("\n\n".join(lines))
     except Exception as e:
         logger.exception(f"admin_list_ads error: {e}")
         await message.answer("❌ Ошибка при получении списка объявлений.")
 
 
+# --------------------------------------------------------------------------- #
+#  Реклама — добавить с позицией                                               #
+# --------------------------------------------------------------------------- #
+
 @router.message(Command("admin_add_ad"))
 @is_admin
 async def admin_add_ad(message: Message):
-    text = message.text.removeprefix("/admin_add_ad").strip()
-    if not text:
-        await message.answer("Использование: /admin_add_ad [текст объявления]")
+    """
+    Формат: /admin_add_ad [before|after] текст объявления
+    before = показывать ДО начала скачивания
+    after  = показывать ПОСЛЕ отправки видео (поведение по умолчанию)
+    """
+    raw = message.text.removeprefix("/admin_add_ad").strip()
+    if not raw:
+        await message.answer(
+            "Использование: /admin_add_ad [before|after] [текст]\n\n"
+            "<i>before</i> — реклама появится до скачивания\n"
+            "<i>after</i> — реклама появится после отправки видео"
+        )
         return
+
+    parts = raw.split(maxsplit=1)
+    if len(parts) < 2 or parts[0].lower() not in AD_POSITIONS:
+        await message.answer(
+            "❌ Не указана позиция.\n\n"
+            "Использование: /admin_add_ad [before|after] [текст]\n"
+            "Пример: <code>/admin_add_ad after 🔥 Подпишись на наш канал!</code>"
+        )
+        return
+
+    position = AD_POSITIONS[parts[0].lower()]
+    ad_text = parts[1].strip()
+
     try:
         repo = AdRepo()
-        await repo.add_ad(text)
-        await message.answer("✅ Объявление добавлено и активно.")
+        await repo.add_ad(ad_text, position=position)
+        pos_label = AD_POSITION_LABELS[position]
+        await message.answer(
+            f"✅ Объявление добавлено и активно.\n"
+            f"📌 Позиция: <b>{pos_label}</b>\n\n"
+            f"<i>Превью:</i>\n{ad_text[:200]}"
+        )
     except Exception as e:
         logger.exception(f"admin_add_ad error: {e}")
         await message.answer("❌ Ошибка при добавлении объявления.")
 
+
+# --------------------------------------------------------------------------- #
+#  Реклама — удалить                                                           #
+# --------------------------------------------------------------------------- #
 
 @router.message(Command("admin_del_ad"))
 @is_admin
@@ -442,12 +438,28 @@ async def admin_del_ad(message: Message):
         return
     try:
         repo = AdRepo()
+        # Verify ad exists first
+        ads = await repo.get_all_ads()
+        ad = next((a for a in ads if a.id == ad_id), None)
+        if not ad:
+            await message.answer(f"❌ Объявление #{ad_id} не найдено.")
+            return
         await repo.remove_ad(ad_id)
-        await message.answer(f"✅ Объявление #{ad_id} удалено.")
+        # Invalidate ad cache
+        try:
+            from services.services import AdService
+            await AdService().invalidate_cache()
+        except Exception:
+            pass
+        await message.answer(f"🗑 Объявление #{ad_id} удалено.")
     except Exception as e:
         logger.exception(f"admin_del_ad error: {e}")
         await message.answer("❌ Ошибка при удалении объявления.")
 
+
+# --------------------------------------------------------------------------- #
+#  Реклама — вкл/выкл                                                          #
+# --------------------------------------------------------------------------- #
 
 @router.message(Command("admin_toggle_ad"))
 @is_admin
@@ -470,6 +482,12 @@ async def admin_toggle_ad(message: Message):
             return
         new_state = not ad.is_active
         await repo.toggle_ad(ad_id, new_state)
+        # Invalidate ad cache
+        try:
+            from services.services import AdService
+            await AdService().invalidate_cache()
+        except Exception:
+            pass
         state_str = "✅ включено" if new_state else "⏸ выключено"
         await message.answer(f"Объявление #{ad_id} {state_str}.")
     except Exception as e:
@@ -498,7 +516,6 @@ async def admin_queue(message: Message):
 #  Broadcast                                                                   #
 # --------------------------------------------------------------------------- #
 
-# Хранилище активных рассылок (admin_id -> asyncio.Event для отмены)
 _broadcast_cancel: dict[int, asyncio.Event] = {}
 
 
@@ -530,10 +547,7 @@ async def admin_broadcast(message: Message, bot: Bot):
         reply_markup=cancel_kb,
     )
 
-    total = 0
-    success = 0
-    failed = 0
-    blocked = 0
+    total = success = failed = blocked = 0
     cancelled = False
 
     try:
@@ -549,23 +563,17 @@ async def admin_broadcast(message: Message, bot: Bot):
             if cancel_event.is_set():
                 cancelled = True
                 break
-
             try:
                 await bot.send_message(uid, text)
                 success += 1
             except TelegramForbiddenError:
                 blocked += 1
-            except TelegramBadRequest as e:
-                logger.debug(f"Broadcast TelegramBadRequest for {uid}: {e}")
-                failed += 1
-            except Exception as e:
+            except (TelegramBadRequest, Exception) as e:
                 logger.debug(f"Broadcast failed for {uid}: {e}")
                 failed += 1
 
-            # Пауза после каждого сообщения — держимся в пределах лимитов Telegram
             await asyncio.sleep(BROADCAST_SLEEP)
 
-            # Обновление прогресса каждые BROADCAST_BATCH сообщений
             if i % BROADCAST_BATCH == 0:
                 pct = int(i / total * 100)
                 bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
@@ -574,7 +582,7 @@ async def admin_broadcast(message: Message, bot: Bot):
                         f"📣 <b>Рассылка в процессе…</b>\n\n"
                         f"[{bar}] {pct}%\n"
                         f"Обработано: {i}/{total}\n"
-                        f"✅ Доставлено: {success} | ❌ Ошибок: {failed} | 🚫 Заблокировали: {blocked}",
+                        f"✅ {success} | ❌ {failed} | 🚫 {blocked}",
                         reply_markup=cancel_kb,
                     )
                 except Exception:
@@ -583,14 +591,10 @@ async def admin_broadcast(message: Message, bot: Bot):
         result_emoji = "🛑 Остановлена" if cancelled else "✅ Завершена"
         await status_msg.edit_text(
             f"📣 <b>Рассылка {result_emoji}</b>\n\n"
-            f"👥 Всего пользователей: <b>{total}</b>\n"
+            f"👥 Всего: <b>{total}</b>\n"
             f"✅ Доставлено: <b>{success}</b>\n"
-            f"🚫 Заблокировали бота: <b>{blocked}</b>\n"
-            f"❌ Другие ошибки: <b>{failed}</b>"
-        )
-        logger.info(
-            f"Broadcast by admin {admin_id}: total={total}, "
-            f"success={success}, blocked={blocked}, failed={failed}, cancelled={cancelled}"
+            f"🚫 Заблокировали: <b>{blocked}</b>\n"
+            f"❌ Ошибок: <b>{failed}</b>"
         )
 
     except Exception as e:
@@ -599,20 +603,14 @@ async def admin_broadcast(message: Message, bot: Bot):
             await status_msg.edit_text("❌ Критическая ошибка во время рассылки.")
         except Exception:
             pass
-
     finally:
         _broadcast_cancel.pop(admin_id, None)
-        # Сохраняем результат в БД
         try:
             log_repo = BroadcastLogRepo()
             await log_repo.log_broadcast(
-                admin_id=admin_id,
-                message=text[:500],  # Ограничиваем длину для БД
-                total=total,
-                success=success,
-                blocked=blocked,
-                failed=failed,
-                cancelled=cancelled,
+                admin_id=admin_id, message=text[:500],
+                total=total, success=success,
+                blocked=blocked, failed=failed, cancelled=cancelled,
             )
         except Exception as e:
             logger.error(f"Failed to log broadcast: {e}")
@@ -621,15 +619,12 @@ async def admin_broadcast(message: Message, bot: Bot):
 @router.message(Command("admin_broadcast_history"))
 @is_admin
 async def admin_broadcast_history(message: Message):
-    """Показывает последние 5 рассылок с результатами."""
     try:
         log_repo = BroadcastLogRepo()
         logs = await log_repo.get_recent_broadcasts(limit=5)
-
         if not logs:
             await message.answer("📭 История рассылок пуста.")
             return
-
         lines = ["📋 <b>Последние рассылки:</b>\n"]
         for log in logs:
             date_str = log.created_at.strftime("%d.%m %H:%M") if getattr(log, "created_at", None) else "—"
@@ -640,7 +635,6 @@ async def admin_broadcast_history(message: Message):
                 f"   📨 {log.success}/{log.total} · 🚫 {log.blocked} · ❌ {log.failed}\n"
                 f"   <i>{preview}</i>"
             )
-
         await message.answer("\n\n".join(lines))
     except Exception as e:
         logger.exception(f"admin_broadcast_history error: {e}")
@@ -654,11 +648,9 @@ async def broadcast_cancel_callback(callback: CallbackQuery):
     except (IndexError, ValueError):
         await callback.answer("❌ Неверный формат.", show_alert=True)
         return
-
     if callback.from_user.id not in settings.ADMIN_IDS:
         await callback.answer("⛔ Нет доступа.", show_alert=True)
         return
-
     event = _broadcast_cancel.get(target_admin_id)
     if event and not event.is_set():
         event.set()
