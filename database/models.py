@@ -1,13 +1,10 @@
 """
 database/models.py
 
-Улучшения:
-- Добавлены referral_code, referred_by, referral_count — раньше были только в DDL,
-  но отсутствовали в ORM-модели, вызывая дрейф схемы
-- Добавлен индекс на downloads(user_id, created_at) через Index()
-- UniqueConstraint на referral_code вынесен явно
-- Модель User получила __repr__ для удобной отладки
-- Добавлена модель Broadcast для хранения истории рассылок
+Changes vs previous version:
+- Added `last_turbo_used` column to User — tracks when a free user last
+  used their weekly Turbo-Download so the 7-day cooldown can be enforced
+  at the DB level (atomic SELECT … FOR UPDATE in UserRepo.use_turbo).
 """
 
 from sqlalchemy import (
@@ -29,12 +26,15 @@ class User(Base):
     is_banned       = Column(Boolean, default=False, nullable=False)
     registered_at   = Column(DateTime, server_default=func.now(), nullable=False)
 
-    # Реферальная система
+    # Referral system
     referral_code   = Column(String(16), unique=True, nullable=True)
     referred_by     = Column(BigInteger, ForeignKey("users.id"), nullable=True)
     referral_count  = Column(Integer, default=0, nullable=False)
 
-    # Связи (lazy — не тянем сразу, репозитории работают без ORM-сессии)
+    # Turbo-Demo: weekly single free download for non-premium users.
+    # NULL means "never used" (turbo is available).
+    last_turbo_used = Column(DateTime, nullable=True)
+
     downloads       = relationship("Download", back_populates="user", lazy="noload")
 
     __table_args__ = (
@@ -47,7 +47,8 @@ class User(Base):
     def __repr__(self) -> str:
         return (
             f"<User id={self.id} lang={self.language} "
-            f"premium={self.is_premium} banned={self.is_banned}>"
+            f"premium={self.is_premium} banned={self.is_banned} "
+            f"turbo={self.last_turbo_used}>"
         )
 
 
@@ -89,10 +90,6 @@ class Ad(Base):
 
 
 class BroadcastLog(Base):
-    """
-    История рассылок — позволяет администратору видеть прошлые кампании
-    и их результаты без необходимости смотреть в логи.
-    """
     __tablename__ = "broadcast_logs"
 
     id          = Column(Integer, primary_key=True, autoincrement=True)

@@ -27,8 +27,8 @@
     "premium_status_active": "✅ Активен до {until}",
     "premium_status_inactive": "❌ Не подключён",
     "premium_active_text": "💎 <b>Premium активен до {until}</b>\n\n✅ Безлимитные загрузки\n✅ Без рекламы\n✅ Приоритетная обработка\n\nНаслаждайся! 🚀",
-    "premium_tariffs": "💎 <b>Premium — качай без ограничений</b>\n\n━━━━━━━━━━━━━━━━━━\n🗓 <b>Неделя</b>   →  <b>49 ₽</b>\n🗓 <b>Месяц</b>   →  <b>149 ₽</b>\n♾ <b>Навсегда</b> →  <b>499 ₽</b>\n━━━━━━━━━━━━━━━━━━\n\n✅ Безлимитные загрузки каждый день\n✅ Ноль рекламы\n✅ Твои задачи в приоритете очереди\n\n👉 Нажми кнопку ниже — тебе ответят в течение пары минут!",
-    "referral_text": "🔗 <b>Твоя реферальная ссылка:</b>\n<code>https://t.me/{bot_username}?start={ref_param}</code>\n\n👥 Приглашено друзей: <b>{count}</b>\n🎁 Бонусных загрузок: <b>+{bonus}</b>\n\n💡 <b>За каждого друга — +5 загрузок навсегда!</b>\nЧем больше поделишься — тем больше качаешь бесплатно 🚀",
+    "premium_tariffs": "⚡️ <b>ФЛЭШ-РАСПРОДАЖА — только сегодня!</b>\n\n━━━━━━━━━━━━━━━━━━━━\n🗓 <b>Неделя</b>   <s>79 ₽</s> → <b>39 ₽</b>  🔥 Скидка 50% — цена жвачки!\n🗓 <b>Месяц</b>    <s>199 ₽</s> → <b>99 ₽</b>  🔥 Скидка 50% — дешевле кофе!\n♾ <b>Навсегда</b> <s>999 ₽</s> → <b>349 ₽</b> 💎 Скидка 65% — мега-выгода!\n━━━━━━━━━━━━━━━━━━━━\n\n✅ Безлимитные загрузки каждый день\n✅ Ноль рекламы — ноль ожидания\n✅ Приоритет в очереди 🚀\n\n⏳ <i>Цены действуют ограниченное время!</i>\n👉 Нажми кнопку — ответим за пару минут!",
+    "referral_text": "🔗 <b>Твоя реферальная ссылка:</b>\n<code>https://t.me/{bot_username}?start={ref_param}</code>\n\n👥 Приглашено друзей: <b>{count}</b>\n🎁 Бонусных загрузок: <b>+{bonus}</b>\n\n🏆 <b>Пригласи 3 друзей = 24 часа Premium БЕСПЛАТНО!</b>\nКаждые 3 новых друга — новый день безлимита 🎉\n\n💡 <i>+5 загрузок за каждого — прямо сейчас!</i>\nДелись — чем больше друзей, тем больше халявных видео 🚀",
     "support_prompt": "🆘 <b>Служба поддержки</b>\n\nЕсть вопрос, проблема или предложение?\n\n<b>Напиши следующим сообщением</b> — опиши ситуацию, и мы передадим её команде. Обычно отвечаем в течение нескольких часов.\n\nИли напиши напрямую: {support}",
     "support_accepted": "✅ <b>Сообщение принято!</b>\n\nКоманда поддержки скоро ответит тебе.\n\nИли напиши напрямую: {support}",
     "donate_text": "❤️ <b>Поддержать проект</b>\n\nБот работает бесплатно — и это благодаря тем, кто поддерживает его развитие.\n\nЕсли он тебе полезен — любой донат мотивирует делать его лучше и быстрее 🙏\n\n👉 Реквизиты и способы оплаты — у администратора {support}",
@@ -38,12 +38,14 @@
     "status_queue_empty": "✅ Очередь пуста — отвечу мгновенно!",
     "status_queue_busy": "⏳ Сейчас в очереди: <b>{count}</b> задач",
     "help_text": "ℹ️ <b>Как пользоваться ботом?</b>\n\n<b>Всё просто:</b>\n1️⃣ Скопируй ссылку на видео из приложения\n2️⃣ Вставь её в этот чат\n3️⃣ Получи видео без водяных знаков за секунды!\n\n<b>Поддерживаемые платформы:</b>\n🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 📌 Pinterest · 👻 Snapchat · и 50+ других\n\n<b>Лимиты:</b>\n• Бесплатно: <b>5 загрузок в день</b>\n• 💎 Premium: <b>безлимитно</b>\n• 👥 Реферал: <b>+5 загрузок</b> за каждого друга\n\n<b>Команды:</b>\n/start — главное меню\n/status — статус очереди и лимитов\n/referral — твоя реферальная ссылка\n/premium — тарифы и подписка\n/donate — поддержать проект\n/support — написать в поддержку\n/set_language — сменить язык\n/help — эта справка",
-    "referral_bonus_notify": "🔥 <b>Твоя реферальная ссылка сработала!</b>\n\nНовый пользователь только что зарегистрировался по твоей ссылке.\nНа счёт начислено <b>+5 бонусных загрузок</b> 🚀\n\nЧем больше друзей — тем больше халявных видео. Делись!",
+    "referral_bonus_notify": "🔥 <b>Твоя реферальная ссылка сработала!</b>\n\nНовый пользователь только что зарегистрировался по твоей ссылке.\nНа счёт начислено <b>+5 бонусных загрузок</b> 🚀\n\n👥 Ещё <b>3 приглашения</b> — и получишь <b>24 часа Premium</b> бесплатно!\nДелись ссылкой → /referral",
     "channel_subscribe": "📣 Подпишись на наш канал — там обновления, фишки и розыгрыши:",
     "error_generic": "❌ Что-то пошло не так. Попробуй позже.",
     "throttle_message": "⏳ Слишком много запросов. Подожди немного.",
     "throttle_callback": "⏳ Слишком часто. Подожди немного.",
-    "support_cta": "👇 Нажми кнопку — напишем тебе в течение нескольких часов:"
+    "support_cta": "👇 Нажми кнопку — напишем тебе в течение нескольких часов:",
+    "turbo_download_used": "🚀 <b>Использована Турбо-загрузка!</b>\n\nСкорость увеличена в 10 раз ⚡️ Вот так работает <b>Premium</b> — каждая загрузка такая же мгновенная, без лимитов и ожидания.\n\n💎 <b>Забирай Premium за копейки</b> — цена ниже чашки кофе!\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>Ура! Ты пригласил {count} друзей и получил 24 часа безлимита!</b>\n\n🚀 Качай всё, что хочешь — прямо сейчас, без рекламы, без очереди!\n\n💡 <i>Следующий бонус — ещё через 3 приглашения. Делись ссылкой → /referral</i>"
   },
   "en": {
     "welcome": "⚡️ Hey, <b>{name}</b>!\n\nDrop any video link — I'll grab it in seconds, no watermarks, no BS.\n\n<b>Works with:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · and 50+ more!\n\n📲 Invite friends → /referral <i>(+5 downloads per friend!)</i>",
@@ -89,7 +91,9 @@
     "error_generic": "❌ Something went wrong. Please try again later.",
     "throttle_message": "⏳ Too many requests. Please wait a moment.",
     "throttle_callback": "⏳ Too fast. Please wait a moment.",
-    "support_cta": "👇 Tap the button — we'll get back to you within a few hours:"
+    "support_cta": "👇 Tap the button — we'll get back to you within a few hours:",
+    "turbo_download_used": "🚀 <b>Turbo-Download used!</b>\n\nSpeed boosted 10x ⚡️ This is what <b>Premium</b> feels like — every download this fast, no limits, no waiting.\n\n💎 <b>Get Premium for less than a coffee!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>You invited {count} friends — 24 hours of Premium unlocked!</b>\n\n🚀 Download anything right now — no ads, no queue!\n\n💡 <i>Next reward in 3 more invites. Share → /referral</i>"
   },
   "es": {
     "welcome": "⚡️ ¡Hola, <b>{name}</b>!\n\nEnvíame un enlace de vídeo — lo descargo en segundos, sin marcas de agua.\n\n<b>Compatible con:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · ¡y más de 50!\n\n📲 Invita amigos → /referral <i>(+5 descargas por amigo!)</i>",
@@ -135,7 +139,9 @@
     "error_generic": "❌ Algo salió mal. Inténtalo más tarde.",
     "throttle_message": "⏳ Demasiadas solicitudes. Espera un momento.",
     "throttle_callback": "⏳ Demasiado rápido. Espera un momento.",
-    "support_cta": "👇 Pulsa el botón — te responderemos en pocas horas:"
+    "support_cta": "👇 Pulsa el botón — te responderemos en pocas horas:",
+    "turbo_download_used": "🚀 <b>¡Descarga Turbo utilizada!</b>\n\nVelocidad aumentada 10x ⚡️ Así es <b>Premium</b> — cada descarga igual de rápida.\n\n💎 <b>¡Consigue Premium por el precio de un chicle!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>¡Invitaste a {count} amigos — 24 horas de Premium desbloqueadas!</b>\n\n🚀 ¡Descarga lo que quieras ahora mismo!\n\n💡 <i>Próxima recompensa en 3 invitaciones más → /referral</i>"
   },
   "pt": {
     "welcome": "⚡️ Olá, <b>{name}</b>!\n\nEnvie um link de vídeo — baixo em segundos, sem marcas d'água.\n\n<b>Suportado:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · e mais de 50!\n\n📲 Convide amigos → /referral <i>(+5 downloads por amigo!)</i>",
@@ -181,7 +187,9 @@
     "error_generic": "❌ Algo deu errado. Tente novamente mais tarde.",
     "throttle_message": "⏳ Muitas solicitações. Aguarde um momento.",
     "throttle_callback": "⏳ Rápido demais. Aguarde um momento.",
-    "support_cta": "👇 Toque o botão — responderemos em poucas horas:"
+    "support_cta": "👇 Toque o botão — responderemos em poucas horas:",
+    "turbo_download_used": "🚀 <b>Download Turbo utilizado!</b>\n\nVelocidade aumentada 10x ⚡️ É assim que o <b>Premium</b> funciona.\n\n💎 <b>Pegue o Premium pelo preço de um café!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>Você convidou {count} amigos — 24 horas de Premium desbloqueadas!</b>\n\n🚀 Baixe tudo que quiser agora mesmo!\n\n💡 <i>Próxima recompensa em 3 mais convites → /referral</i>"
   },
   "de": {
     "welcome": "⚡️ Hey, <b>{name}</b>!\n\nSchick mir einen Video-Link — ich lade ihn in Sekunden herunter, ohne Wasserzeichen.\n\n<b>Unterstützt:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · und 50+ mehr!\n\n📲 Lade Freunde ein → /referral <i>(+5 Downloads pro Freund!)</i>",
@@ -227,7 +235,9 @@
     "error_generic": "❌ Etwas ist schief gelaufen. Versuche es später erneut.",
     "throttle_message": "⏳ Zu viele Anfragen. Warte einen Moment.",
     "throttle_callback": "⏳ Zu schnell. Warte einen Moment.",
-    "support_cta": "👇 Tippe den Button — wir melden uns innerhalb weniger Stunden:"
+    "support_cta": "👇 Tippe den Button — wir melden uns innerhalb weniger Stunden:",
+    "turbo_download_used": "🚀 <b>Turbo-Download verwendet!</b>\n\nGeschwindigkeit 10x erhöht ⚡️ So fühlt sich <b>Premium</b> an.\n\n💎 <b>Hol dir Premium für weniger als ein Kaffee!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>Du hast {count} Freunde eingeladen — 24 Stunden Premium freigeschaltet!</b>\n\n🚀 Lade jetzt alles herunter — keine Werbung, keine Warteschlange!\n\n💡 <i>Nächste Belohnung in 3 weiteren Einladungen → /referral</i>"
   },
   "fr": {
     "welcome": "⚡️ Salut, <b>{name}</b>!\n\nEnvoie-moi un lien vidéo — je le télécharge en secondes, sans filigrane.\n\n<b>Compatible avec:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · et 50+ autres!\n\n📲 Invite des amis → /referral <i>(+5 téléchargements par ami!)</i>",
@@ -273,7 +283,9 @@
     "error_generic": "❌ Quelque chose s'est mal passé. Réessaie plus tard.",
     "throttle_message": "⏳ Trop de requêtes. Attends un moment.",
     "throttle_callback": "⏳ Trop rapide. Attends un moment.",
-    "support_cta": "👇 Appuie sur le bouton — on te répond dans quelques heures:"
+    "support_cta": "👇 Appuie sur le bouton — on te répond dans quelques heures:",
+    "turbo_download_used": "🚀 <b>Téléchargement Turbo utilisé!</b>\n\nVitesse multipliée par 10 ⚡️ C'est ainsi que fonctionne <b>Premium</b>.\n\n💎 <b>Obtiens Premium pour moins qu'un café!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>Tu as invité {count} amis — 24 heures de Premium débloquées!</b>\n\n🚀 Télécharge tout ce que tu veux maintenant!\n\n💡 <i>Prochain bonus dans 3 invitations → /referral</i>"
   },
   "hi": {
     "welcome": "⚡️ नमस्ते, <b>{name}</b>!\n\nकोई भी वीडियो लिंक भेजें — सेकंडों में डाउनलोड, बिना वॉटरमार्क!\n\n<b>सपोर्टेड:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · और 50+ अन्य!\n\n📲 दोस्तों को आमंत्रित करें → /referral <i>(प्रति मित्र +5 डाउनलोड!)</i>",
@@ -319,7 +331,9 @@
     "error_generic": "❌ कुछ गलत हो गया। बाद में पुनः प्रयास करें।",
     "throttle_message": "⏳ बहुत अधिक अनुरोध। थोड़ा इंतज़ार करें।",
     "throttle_callback": "⏳ बहुत तेज़। थोड़ा इंतज़ार करें।",
-    "support_cta": "👇 बटन दबाएं — हम कुछ घंटों में जवाब देंगे:"
+    "support_cta": "👇 बटन दबाएं — हम कुछ घंटों में जवाब देंगे:",
+    "turbo_download_used": "🚀 <b>टर्बो-डाउनलोड उपयोग किया!</b>\n\nस्पीड 10 गुना बढ़ी ⚡️ यही है <b>Premium</b> — हर डाउनलोड इतनी तेज़।\n\n💎 <b>एक कॉफी से सस्ता Premium लें!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>आपने {count} दोस्तों को आमंत्रित किया — 24 घंटे का Premium मिला!</b>\n\n🚀 अभी कुछ भी डाउनलोड करें!\n\n💡 <i>अगला बोनस 3 और आमंत्रणों में → /referral</i>"
   },
   "ar": {
     "welcome": "⚡️ مرحباً، <b>{name}</b>!\n\nأرسل رابط فيديو — سأحمّله في ثوانٍ بدون علامة مائية!\n\n<b>يدعم:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · وأكثر من 50 منصة!\n\n📲 ادعُ أصدقاء → /referral <i>(+5 تحميلات لكل صديق!)</i>",
@@ -365,6 +379,8 @@
     "error_generic": "❌ حدث خطأ ما. حاول مرة أخرى لاحقاً.",
     "throttle_message": "⏳ طلبات كثيرة جداً. انتظر لحظة.",
     "throttle_callback": "⏳ سريع جداً. انتظر لحظة.",
-    "support_cta": "👇 اضغط الزر — سنرد عليك خلال ساعات:"
+    "support_cta": "👇 اضغط الزر — سنرد عليك خلال ساعات:",
+    "turbo_download_used": "🚀 <b>تم استخدام التحميل التوربو!</b>\n\nتسريع السرعة 10 أضعاف ⚡️ هكذا يعمل <b>Premium</b>.\n\n💎 <b>احصل على Premium بأقل من ثمن قهوة!</b>\n👉 /premium",
+    "referral_milestone_premium": "🎉 <b>دعوت {count} أصدقاء — فُتح 24 ساعة Premium مجاناً!</b>\n\n🚀 حمّل ما تريد الآن بدون إعلانات!\n\n💡 <i>المكافأة التالية في 3 دعوات أخرى → /referral</i>"
   }
 }

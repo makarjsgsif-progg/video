@@ -1,14 +1,14 @@
 """
 handlers/user.py
 
-God-Tier Refactor + Fix:
-- STRICT message priority: Commands → Menu Buttons → URL → Show Main Menu (no support fallback)
-- Button texts pre-computed as module-level frozensets (fast O(1) lookup, no race)
-- Profile: "Something went wrong" eliminated — full try/except + graceful fallback
-- Premium: viral tariff card with per-lang pricing
-- i18n: every string uses get_text(); zero hard-coded Russian outside keys
-- Support fallback REMOVED: now any non-URL, non-button, non-command text triggers main menu (like /start)
-- Inline "Наш канал" / "Our channel" attached to all key replies
+Changes vs previous version:
+- _process_referral: after incrementing the referrer's count, fetches the
+  fresh value directly from DB and checks for milestones (every 3 invites).
+  On milestone: calls UserRepo.grant_milestone_premium (24 h, stackable) and
+  sends a high-energy viral congratulation message.
+- cmd_premium: no logic change — pricing is now driven by the locales file
+  (premium_tariffs key updated there with viral FOMO copy).
+- All other handlers unchanged.
 """
 
 from __future__ import annotations
@@ -39,10 +39,26 @@ logger = logging.getLogger(__name__)
 _URL_RE = re.compile(r"https?://[^\s]+", re.I)
 CHANNEL_URL = "https://t.me/downloaddq"
 
-# Button key names used in every keyboard
 _BUTTON_KEYS = (
     "btn_download", "btn_profile", "btn_referral",
     "btn_premium", "btn_donate", "btn_language", "btn_support",
+)
+
+# Referral milestone: every N invites = 24 h of free Premium
+_REFERRAL_MILESTONE = 3
+
+# Viral congratulation text for the referrer (Russian — primary growth market)
+_MILESTONE_MSG_RU = (
+    "🎉 <b>Ура! Ты пригласил {count} друзей и получил 24 часа безлимита!</b>\n\n"
+    "🚀 Качай всё, что хочешь — прямо сейчас, без рекламы, без очереди!\n\n"
+    "💡 <i>Следующий бонус — ещё через {milestone} приглашений. "
+    "Делись ссылкой → /referral</i>"
+)
+# English fallback for non-Russian locales
+_MILESTONE_MSG_EN = (
+    "🎉 <b>You just invited {count} friends — 24 hours of Premium unlocked!</b>\n\n"
+    "🚀 Download anything, right now — no ads, no queue!\n\n"
+    "💡 <i>Next reward in {milestone} more invites. Share → /referral</i>"
 )
 
 # ── Singletons ───────────────────────────────────────────────────────────────
@@ -64,7 +80,7 @@ def get_limit_service() -> LimitService:
     return _limit_service
 
 
-# ── Pre-computed button text sets (module-level, computed once on import) ─────
+# ── Pre-computed button text sets ─────────────────────────────────────────────
 def _build_button_set() -> frozenset[str]:
     result: set[str] = set()
     for lang in languages:
@@ -96,7 +112,7 @@ def channel_and_support_kb(lang: str = "ru") -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=get_text(lang, "btn_channel"), url=CHANNEL_URL),
         InlineKeyboardButton(
             text=get_text(lang, "btn_contact_support"),
-            url="https://t.me/YourBotPayments",  # direct link without @
+            url="https://t.me/YourBotPayments",
         ),
     ]])
 
@@ -216,6 +232,12 @@ async def cmd_start(message: Message, user_db, bot: Bot):
 async def _process_referral(
     message: Message, user_db, ref_arg: str, bot: Bot, lang: str
 ):
+    """
+    Attributes the new user to their referrer and:
+      1. Gives the referrer +5 daily-download bonus (existing behaviour).
+      2. Checks the referrer's new total against _REFERRAL_MILESTONE (3, 6, 9…).
+         On milestone → grant 24 h of stacking Premium + send viral message.
+    """
     repo = UserRepo()
     referrer = None
 
@@ -242,13 +264,39 @@ async def _process_referral(
     try:
         await repo.set_referred_by(message.from_user.id, referrer_id)
         await repo.increment_referral_count(referrer_id)
+
+        # ── Download-bonus (existing) ─────────────────────────────────
         await get_limit_service().add_referral_bonus(referrer_id, amount=5)
 
+        # ── Fetch fresh count to detect milestone ─────────────────────
+        # increment_referral_count invalidates the cache, so we read from DB.
+        new_count = await repo.get_fresh_referral_count(referrer_id)
+
         ref_lang = getattr(referrer, "language", "ru") or "ru"
-        try:
-            await bot.send_message(referrer_id, get_text(ref_lang, "referral_bonus_notify"))
-        except Exception:
-            pass
+
+        # ── Milestone check ───────────────────────────────────────────
+        if new_count > 0 and new_count % _REFERRAL_MILESTONE == 0:
+            await repo.grant_milestone_premium(referrer_id, hours=24)
+            logger.info(
+                f"Milestone! user={referrer_id} referrals={new_count} → +24h Premium"
+            )
+            milestone_text = (
+                _MILESTONE_MSG_RU if ref_lang == "ru" else _MILESTONE_MSG_EN
+            ).format(count=new_count, milestone=_REFERRAL_MILESTONE)
+            try:
+                await bot.send_message(referrer_id, milestone_text)
+            except Exception:
+                pass
+        else:
+            # Regular "+1 friend" notification
+            try:
+                await bot.send_message(
+                    referrer_id,
+                    get_text(ref_lang, "referral_bonus_notify"),
+                )
+            except Exception:
+                pass
+
     except Exception as e:
         logger.exception(f"Referral processing error for {message.from_user.id}: {e}")
 
@@ -326,6 +374,7 @@ async def btn_profile(message: Message, user_db, bot: Bot):
     except Exception as e:
         logger.exception(f"btn_profile error for {message.from_user.id}: {e}")
         try:
+            lc = _get_lang(user_db)
             await message.answer(get_text(lc, "error_generic"))
         except Exception:
             pass
@@ -384,6 +433,8 @@ async def cmd_premium(message: Message, user_db):
                 reply_markup=premium_active_kb(lang),
             )
         else:
+            # Pricing copy lives in locales (premium_tariffs key).
+            # Russian locale now shows viral FOMO flash-sale pricing.
             await message.answer(
                 get_text(lang, "premium_tariffs"),
                 reply_markup=premium_buy_kb(lang),
@@ -435,7 +486,7 @@ async def cmd_set_language(message: Message, user_db):
         await message.answer(get_text(lang, "error_generic"))
 
 
-# ── Button: Support (explicit button press) ───────────────────────────────────
+# ── Button: Support ───────────────────────────────────────────────────────────
 @router.message(F.text.func(lambda t: t in _BTN_SUPPORT))
 @router.message(Command("support"))
 async def cmd_support(message: Message, user_db):
@@ -495,19 +546,12 @@ async def cmd_status(message: Message, user_db):
         await message.answer(get_text(lang, "error_generic"))
 
 
-# ── Main message handler: URL → download | otherwise → main menu ─────────────
-# PRIORITY ORDER:
-#   1. Commands
-#   2. Button texts (handlers above)
-#   3. THIS handler
-# If text is a valid URL → download
-# Else → show main menu (like /start), NOT forward to support.
+# ── Main message handler ──────────────────────────────────────────────────────
 @router.message(F.text, ~F.text.startswith("/"))
 async def handle_text(message: Message, user_db, bot: Bot):
     text = (message.text or "").strip()
     lang = _get_lang(user_db)
 
-    # Never treat any known button text as a URL
     if text in _ALL_BUTTON_TEXTS:
         return
 
@@ -531,7 +575,7 @@ async def handle_text(message: Message, user_db, bot: Bot):
             await message.answer(get_text(lang, "error_generic"))
         return
 
-    # ── Not a URL, not a button, not a command → show main menu (like /start)
+    # Not a URL, not a button, not a command → show main menu
     name = message.from_user.first_name or ("друг" if lang == "ru" else "friend")
     try:
         await message.answer(

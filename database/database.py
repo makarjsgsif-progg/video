@@ -1,16 +1,22 @@
 """
 database/database.py
 
-Улучшения:
-- BroadcastLogRepo — история рассылок с методами log_broadcast и get_recent_broadcasts
-- get_premium_users_count — для расширенной статистики в /admin_stats
-- get_all_user_ids теперь принимает параметр include_banned (по умолчанию False)
-- get_active_users_today безопасен при пустой таблице downloads (обработка нулевого результата)
-- UserRepo.get_user возвращает None вместо исключения при отсутствии таблицы на холодном старте
-- _invalidate_cache вынесен в публичный метод (вызывается из main.py premium_expiry_task)
-- _dict_to_user / _user_to_dict — перенесены сюда, чтобы избежать дублирования в middleware
-- Все репозитории: единообразный стиль логирования
-- init_db: добавляет таблицу broadcast_logs и новые индексы при миграции
+New vs previous version:
+- UserRepo.use_turbo(user_id) → bool
+    Atomically checks whether the free-user weekly Turbo-Download is available
+    (last_turbo_used IS NULL or older than 7 days) and, if so, sets it to NOW().
+    Uses SELECT … FOR UPDATE to prevent double-spending in concurrent requests.
+    Returns True when turbo was available and has been consumed.
+
+- UserRepo.get_fresh_referral_count(user_id) → int
+    Reads referral_count directly from the DB (bypasses Redis cache), used
+    right after increment_referral_count to detect milestone thresholds.
+
+- UserRepo.grant_milestone_premium(user_id, hours=24)
+    Grants N hours of Premium.  If the user already has Premium that hasn't
+    expired, the new duration is ADDED on top (fair stacking).
+
+- init_db: ALTER TABLE migration adds last_turbo_used to existing databases.
 """
 
 import asyncio
@@ -32,7 +38,7 @@ logger = logging.getLogger(__name__)
 _is_postgres = "postgresql" in settings.DATABASE_URL or "postgres" in settings.DATABASE_URL
 
 # --------------------------------------------------------------------------- #
-#  Пул соединений                                                              #
+#  Connection pool                                                             #
 # --------------------------------------------------------------------------- #
 
 _pool: Optional[ThreadedConnectionPool] = None
@@ -72,7 +78,6 @@ def _get_pool() -> ThreadedConnectionPool:
 
 @contextmanager
 def get_sync_connection():
-    """Контекстный менеджер: берёт соединение из пула и возвращает обратно."""
     pool = _get_pool()
     conn = pool.getconn()
     try:
@@ -88,17 +93,14 @@ def get_sync_connection():
 
 
 async def run_sync(func, *args, **kwargs):
-    """Выполняет синхронную функцию в пуле потоков asyncio."""
     return await asyncio.to_thread(func, *args, **kwargs)
 
 
 # --------------------------------------------------------------------------- #
-#  Совместимый async-сессионный менеджер (для обратной совместимости)         #
+#  Async session stub (backward compat)                                       #
 # --------------------------------------------------------------------------- #
 
 class AsyncSessionMaker:
-    """Stub-менеджер: репозитории работают напрямую через пул, без ORM-сессий."""
-
     async def __aenter__(self):
         return self
 
@@ -113,7 +115,7 @@ async_session_maker = AsyncSessionMaker
 
 
 # --------------------------------------------------------------------------- #
-#  Утилиты                                                                     #
+#  Utilities                                                                   #
 # --------------------------------------------------------------------------- #
 
 def _gen_ref_code(length: int = 8) -> str:
@@ -126,10 +128,8 @@ def _gen_ref_code(length: int = 8) -> str:
 # --------------------------------------------------------------------------- #
 
 class UserRepo:
-    """Репозиторий для работы с таблицей users."""
 
     def _get_redis(self):
-        """Ленивый Redis-клиент для кэша (используется в UserMiddleware)."""
         try:
             import redis.asyncio as aioredis
             if not hasattr(self, "_redis_client") or self._redis_client is None:
@@ -139,7 +139,6 @@ class UserRepo:
             return None
 
     async def get_user(self, user_id: int):
-        """Возвращает пользователя по ID или None."""
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -155,7 +154,6 @@ class UserRepo:
         return type("User", (), data)() if data else None
 
     async def create_user(self, user_id: int, language: str = "ru", referred_by: int = None):
-        """Создаёт нового пользователя с уникальным реферальным кодом."""
         def _create():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -179,7 +177,6 @@ class UserRepo:
         return await self.get_user(user_id)
 
     async def set_language(self, user_id: int, language: str):
-        """Обновляет язык пользователя и инвалидирует кэш."""
         def _set():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -190,7 +187,6 @@ class UserRepo:
         await self.invalidate_cache(user_id)
 
     async def set_premium(self, user_id: int, days: int):
-        """Выдаёт Premium на указанное количество дней."""
         def _set():
             until = datetime.now() + timedelta(days=days)
             with get_sync_connection() as conn:
@@ -205,7 +201,6 @@ class UserRepo:
         await self.invalidate_cache(user_id)
 
     async def remove_premium(self, user_id: int):
-        """Снимает Premium."""
         def _remove():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -219,7 +214,6 @@ class UserRepo:
         await self.invalidate_cache(user_id)
 
     async def ban_user(self, user_id: int):
-        """Блокирует пользователя."""
         def _ban():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -230,7 +224,6 @@ class UserRepo:
         await self.invalidate_cache(user_id)
 
     async def unban_user(self, user_id: int):
-        """Разблокирует пользователя."""
         def _unban():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -241,7 +234,6 @@ class UserRepo:
         await self.invalidate_cache(user_id)
 
     async def increment_referral_count(self, referrer_id: int):
-        """Увеличивает счётчик приглашённых на 1."""
         def _inc():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -254,8 +246,64 @@ class UserRepo:
         await run_sync(_inc)
         await self.invalidate_cache(referrer_id)
 
+    async def get_fresh_referral_count(self, user_id: int) -> int:
+        """
+        Returns current referral_count straight from the DB (bypasses Redis
+        cache).  Call this right after increment_referral_count so milestone
+        detection always sees the up-to-date value.
+        """
+        def _get():
+            with get_sync_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT referral_count FROM users WHERE id = %s", (user_id,))
+                    row = cur.fetchone()
+                    return int(row[0]) if row else 0
+
+        try:
+            return await run_sync(_get)
+        except Exception as e:
+            logger.error(f"UserRepo.get_fresh_referral_count({user_id}) error: {e}")
+            return 0
+
+    async def grant_milestone_premium(self, user_id: int, hours: int = 24):
+        """
+        Grants `hours` of Premium as a referral milestone reward.
+
+        Fair-stacking rule: if the user already has active Premium (premium_until
+        > NOW()), the reward is added on top of the existing expiry so the user
+        never loses their existing time.
+        """
+        def _grant():
+            with get_sync_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT is_premium, premium_until FROM users WHERE id = %s",
+                        (user_id,)
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        return
+                    is_premium, current_until = row
+                    now = datetime.now()
+                    # If premium is active and not yet expired, stack on top
+                    if is_premium and current_until and current_until > now:
+                        new_until = current_until + timedelta(hours=hours)
+                    else:
+                        new_until = now + timedelta(hours=hours)
+                    cur.execute(
+                        "UPDATE users SET is_premium = true, premium_until = %s WHERE id = %s",
+                        (new_until, user_id),
+                    )
+                    conn.commit()
+
+        try:
+            await run_sync(_grant)
+            await self.invalidate_cache(user_id)
+            logger.info(f"Granted {hours}h milestone premium to user {user_id}")
+        except Exception as e:
+            logger.error(f"UserRepo.grant_milestone_premium({user_id}) error: {e}")
+
     async def set_referred_by(self, user_id: int, referrer_id: int):
-        """Записывает, кто пригласил пользователя."""
         def _set():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -269,7 +317,6 @@ class UserRepo:
         await self.invalidate_cache(user_id)
 
     async def get_user_by_referral_code(self, code: str):
-        """Находит пользователя по реферальному коду (case-insensitive)."""
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -280,8 +327,48 @@ class UserRepo:
         data = await run_sync(_get)
         return type("User", (), data)() if data else None
 
+    async def use_turbo(self, user_id: int) -> bool:
+        """
+        Atomically checks whether the free-user weekly Turbo-Download is
+        available and, if so, marks it as used.
+
+        Availability: last_turbo_used IS NULL  OR  NOW() - last_turbo_used >= 7 days.
+
+        Uses SELECT … FOR UPDATE so two concurrent requests for the same user
+        cannot both consume the turbo.  Returns True when turbo was available
+        and has been consumed; False otherwise.
+        """
+        def _check_and_set():
+            with get_sync_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT last_turbo_used FROM users WHERE id = %s FOR UPDATE",
+                        (user_id,)
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        conn.rollback()
+                        return False
+                    last_turbo = row[0]
+                    now = datetime.now()
+                    cooldown_seconds = 7 * 24 * 3600
+                    if last_turbo is None or (now - last_turbo).total_seconds() >= cooldown_seconds:
+                        cur.execute(
+                            "UPDATE users SET last_turbo_used = %s WHERE id = %s",
+                            (now, user_id)
+                        )
+                        conn.commit()
+                        return True
+                    conn.rollback()
+                    return False
+
+        try:
+            return await run_sync(_check_and_set)
+        except Exception as e:
+            logger.error(f"UserRepo.use_turbo({user_id}) error: {e}")
+            return False  # fail-closed: don't grant turbo on DB errors
+
     async def get_all_users_count(self) -> int:
-        """Возвращает общее число зарегистрированных пользователей."""
         def _count():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -291,7 +378,6 @@ class UserRepo:
         return await run_sync(_count)
 
     async def get_premium_users_count(self) -> int:
-        """Возвращает число активных Premium-пользователей."""
         def _count():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -303,10 +389,6 @@ class UserRepo:
         return await run_sync(_count)
 
     async def get_active_users_today(self) -> int:
-        """
-        Возвращает число уникальных пользователей, совершивших загрузку сегодня.
-        Безопасен при пустой таблице downloads.
-        """
         def _count():
             today = datetime.now().date()
             with get_sync_connection() as conn:
@@ -324,10 +406,6 @@ class UserRepo:
         return await run_sync(_count)
 
     async def get_all_user_ids(self, include_banned: bool = False) -> list[int]:
-        """
-        Возвращает все ID пользователей для рассылки.
-        По умолчанию исключает заблокированных пользователей.
-        """
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -340,7 +418,6 @@ class UserRepo:
         return await run_sync(_get)
 
     async def invalidate_cache(self, user_id: int):
-        """Удаляет запись пользователя из Redis-кэша."""
         try:
             redis = self._get_redis()
             if redis:
@@ -348,7 +425,6 @@ class UserRepo:
         except Exception as e:
             logger.debug(f"Cache invalidation failed for {user_id}: {e}")
 
-    # Алиас для обратной совместимости (вызывается из main.py)
     async def _invalidate_cache(self, user_id: int):
         await self.invalidate_cache(user_id)
 
@@ -358,10 +434,8 @@ class UserRepo:
 # --------------------------------------------------------------------------- #
 
 class DownloadRepo:
-    """Репозиторий для работы с таблицей downloads."""
 
     async def add_download(self, user_id: int, platform: str):
-        """Записывает факт загрузки."""
         def _add():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -374,7 +448,6 @@ class DownloadRepo:
         await run_sync(_add)
 
     async def get_total_downloads(self) -> int:
-        """Возвращает общее число загрузок."""
         def _count():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -385,7 +458,6 @@ class DownloadRepo:
         return await run_sync(_count)
 
     async def get_user_downloads_today(self, user_id: int) -> int:
-        """Возвращает число загрузок конкретного пользователя за сегодня."""
         def _count():
             today = datetime.now().date()
             with get_sync_connection() as conn:
@@ -400,7 +472,6 @@ class DownloadRepo:
         return await run_sync(_count)
 
     async def get_downloads_by_platform(self, limit: int = 5) -> list[tuple[str, int]]:
-        """Топ платформ по числу загрузок (для статистики)."""
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -418,7 +489,6 @@ class DownloadRepo:
         return [(r[0], r[1]) for r in rows]
 
     async def get_downloads_today(self) -> int:
-        """Возвращает число загрузок за сегодня по всем пользователям."""
         def _count():
             today = datetime.now().date()
             with get_sync_connection() as conn:
@@ -438,10 +508,8 @@ class DownloadRepo:
 # --------------------------------------------------------------------------- #
 
 class AdRepo:
-    """Репозиторий для работы с таблицей ads."""
 
     async def add_ad(self, text: str, position: str = "after_download"):
-        """Добавляет новое рекламное объявление с указанием позиции показа."""
         def _add():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -453,9 +521,7 @@ class AdRepo:
 
         await run_sync(_add)
 
-
     async def get_active_ads(self):
-        """Возвращает активные рекламные объявления."""
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -466,7 +532,6 @@ class AdRepo:
         return [type("Ad", (), row)() for row in rows]
 
     async def get_all_ads(self):
-        """Возвращает все рекламные объявления (активные и неактивные)."""
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -477,7 +542,6 @@ class AdRepo:
         return [type("Ad", (), row)() for row in rows]
 
     async def remove_ad(self, ad_id: int):
-        """Удаляет объявление по ID."""
         def _remove():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -487,7 +551,6 @@ class AdRepo:
         await run_sync(_remove)
 
     async def toggle_ad(self, ad_id: int, active: bool):
-        """Включает или отключает объявление."""
         def _toggle():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -504,7 +567,6 @@ class AdRepo:
 # --------------------------------------------------------------------------- #
 
 class BroadcastLogRepo:
-    """Репозиторий для хранения истории рассылок."""
 
     async def log_broadcast(
         self,
@@ -516,7 +578,6 @@ class BroadcastLogRepo:
         failed: int,
         cancelled: bool,
     ) -> int:
-        """Сохраняет запись о рассылке. Возвращает ID записи."""
         def _log():
             with get_sync_connection() as conn:
                 with conn.cursor() as cur:
@@ -538,7 +599,6 @@ class BroadcastLogRepo:
             return -1
 
     async def get_recent_broadcasts(self, limit: int = 5) -> list:
-        """Возвращает последние N рассылок."""
         def _get():
             with get_sync_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -564,40 +624,42 @@ class BroadcastLogRepo:
 
 async def init_db():
     """
-    Создаёт таблицы и индексы, если их нет.
-    Безопасен для повторного вызова (IF NOT EXISTS).
-    Автоматически добавляет новые колонки при миграции (ALTER TABLE IF NOT EXISTS).
+    Creates tables and indices if they don't exist.
+    Safe for repeated calls (IF NOT EXISTS / ALTER … IF NOT EXISTS).
     """
     def _create():
         with get_sync_connection() as conn:
             with conn.cursor() as cur:
-                # ── Таблица пользователей ──────────────────────────────────
+
+                # ── Users ──────────────────────────────────────────────────
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS users (
-                        id             BIGINT PRIMARY KEY,
-                        language       VARCHAR(5)  DEFAULT 'ru' NOT NULL,
-                        is_premium     BOOLEAN     DEFAULT FALSE NOT NULL,
-                        premium_until  TIMESTAMP,
-                        is_banned      BOOLEAN     DEFAULT FALSE NOT NULL,
-                        registered_at  TIMESTAMP   DEFAULT NOW() NOT NULL,
-                        referral_code  VARCHAR(16) UNIQUE,
-                        referred_by    BIGINT REFERENCES users(id),
-                        referral_count INTEGER     DEFAULT 0 NOT NULL
+                        id              BIGINT PRIMARY KEY,
+                        language        VARCHAR(5)  DEFAULT 'ru' NOT NULL,
+                        is_premium      BOOLEAN     DEFAULT FALSE NOT NULL,
+                        premium_until   TIMESTAMP,
+                        is_banned       BOOLEAN     DEFAULT FALSE NOT NULL,
+                        registered_at   TIMESTAMP   DEFAULT NOW() NOT NULL,
+                        referral_code   VARCHAR(16) UNIQUE,
+                        referred_by     BIGINT REFERENCES users(id),
+                        referral_count  INTEGER     DEFAULT 0 NOT NULL,
+                        last_turbo_used TIMESTAMP
                     )
                 """)
 
-                # Миграция: добавляем колонки, если их нет (для старых БД)
+                # Migrations for existing databases
                 for col_sql in [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(16) UNIQUE",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT REFERENCES users(id)",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0 NOT NULL",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_turbo_used TIMESTAMP",
                 ]:
                     try:
                         cur.execute(col_sql)
                     except Exception:
                         conn.rollback()
 
-                # ── Таблица загрузок ───────────────────────────────────────
+                # ── Downloads ─────────────────────────────────────────────
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS downloads (
                         id         SERIAL PRIMARY KEY,
@@ -607,7 +669,7 @@ async def init_db():
                     )
                 """)
 
-                # ── Таблица рекламы ────────────────────────────────────────
+                # ── Ads ───────────────────────────────────────────────────
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS ads (
                         id           SERIAL PRIMARY KEY,
@@ -617,7 +679,6 @@ async def init_db():
                         created_at   TIMESTAMP DEFAULT NOW() NOT NULL
                     )
                 """)
-                # Migration: add position column to existing ads tables
                 try:
                     cur.execute(
                         "ALTER TABLE ads ADD COLUMN IF NOT EXISTS "
@@ -626,7 +687,7 @@ async def init_db():
                 except Exception:
                     conn.rollback()
 
-                # ── Таблица истории рассылок ───────────────────────────────
+                # ── Broadcast logs ────────────────────────────────────────
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS broadcast_logs (
                         id         SERIAL PRIMARY KEY,
@@ -641,17 +702,17 @@ async def init_db():
                     )
                 """)
 
-                # ── Индексы ────────────────────────────────────────────────
-                indices = [
+                # ── Indices ───────────────────────────────────────────────
+                for idx in [
                     "CREATE INDEX IF NOT EXISTS idx_downloads_user_created ON downloads(user_id, created_at)",
                     "CREATE INDEX IF NOT EXISTS idx_downloads_platform ON downloads(platform)",
                     "CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON downloads(created_at)",
                     "CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)",
                     "CREATE INDEX IF NOT EXISTS idx_users_is_premium ON users(is_premium)",
+                    "CREATE INDEX IF NOT EXISTS idx_users_last_turbo ON users(last_turbo_used)",
                     "CREATE INDEX IF NOT EXISTS idx_broadcast_logs_admin ON broadcast_logs(admin_id)",
                     "CREATE INDEX IF NOT EXISTS idx_broadcast_logs_created ON broadcast_logs(created_at)",
-                ]
-                for idx in indices:
+                ]:
                     cur.execute(idx)
 
                 conn.commit()

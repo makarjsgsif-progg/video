@@ -1,9 +1,13 @@
 """
 bot/worker.py
 
-Изменения:
-- Все пользовательские сообщения переписаны на вирусный/энергичный русский
-- Логика без изменений (pop_task BRPOP, rollback, retry, etc.)
+Changes vs previous version:
+- Turbo-Demo mode: after a daily-limit block, UserRepo.use_turbo() is called.
+  If the user has an unused weekly turbo, the limit counter is rolled back and
+  the download proceeds normally.  After the video is sent, a viral teaser
+  message is shown to nudge the user towards Premium.
+- is_turbo flag is threaded through _execute_download_logic → _send_video.
+- FREE_USER_DELAY constant retained for future use.
 """
 
 import asyncio
@@ -12,7 +16,6 @@ import random
 from typing import Optional
 
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter, TelegramBadRequest
-
 from aiogram.types import BufferedInputFile
 
 from bot.loader import bot
@@ -22,9 +25,7 @@ from config.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Artificial delay (seconds) shown to free users before download starts.
-# Creates perceived value gap vs Premium ("instant").
-FREE_USER_DELAY = 15  # seconds
+FREE_USER_DELAY = 15  # seconds (reserved for future use / A-B testing)
 
 PLATFORM_EMOJI = {
     "tiktok": "🎵",
@@ -41,6 +42,15 @@ PLATFORM_EMOJI = {
     "microsoftstream": "💼",
 }
 
+# Turbo teaser — shown AFTER the video so it lands when the user is happiest
+_TURBO_TEASER = (
+    "🚀 <b>Использована Турбо-загрузка!</b>\n\n"
+    "Скорость увеличена в 10 раз ⚡️ Вот так работает <b>Premium</b> — "
+    "каждая загрузка такая же мгновенная, без лимитов и ожидания.\n\n"
+    "💎 <b>Забирай Premium за копейки</b> — цена ниже чашки кофе!\n"
+    "👉 /premium"
+)
+
 
 class Worker:
     def __init__(self, max_concurrent_tasks: int = 5):
@@ -52,7 +62,7 @@ class Worker:
         self._active_tasks: set[asyncio.Task] = set()
 
     # ---------------------------------------------------------------------- #
-    #  Точка входа                                                            #
+    #  Entry point                                                            #
     # ---------------------------------------------------------------------- #
 
     async def run(self):
@@ -89,7 +99,7 @@ class Worker:
                 logger.error(f"Task raised an exception: {exc}")
 
     # ---------------------------------------------------------------------- #
-    #  Обработка задачи                                                       #
+    #  Task processing                                                        #
     # ---------------------------------------------------------------------- #
 
     async def process_task(self, task: dict):
@@ -105,7 +115,7 @@ class Worker:
         platform_key = platform.split(".")[-1].lower() if "." in platform else platform.lower()
         emoji = PLATFORM_EMOJI.get(platform_key, "📥")
 
-        # ── 1. Проверяем пользователя ─────────────────────────────────────
+        # ── 1. Verify user ────────────────────────────────────────────────
         user_repo = UserRepo()
         user = await user_repo.get_user(user_id)
         if not user or user.is_banned:
@@ -113,19 +123,37 @@ class Worker:
             return
         is_premium: bool = bool(user.is_premium)
 
-        # ── 2. Проверяем лимит ────────────────────────────────────────────
-        if not await self.limit_service.check_and_increment(user_id, is_premium):
-            used, limit = await self.limit_service.get_usage(user_id)
-            await self._safe_send(
-                user_id,
-                f"⏳ <b>Лимит на сегодня исчерпан!</b>\n\n"
-                f"Ты уже скачал <b>{used}/{limit}</b> видео сегодня — это максимум для бесплатного плана.\n\n"
-                f"💎 <b>Premium</b> — безлимитные загрузки каждый день без ограничений.\n"
-                f"👥 Или пригласи друга → /referral и получи <b>+5 загрузок</b> прямо сейчас!",
-            )
-            return
+        # ── 2. Check daily limit ──────────────────────────────────────────
+        #
+        #  Turbo-Demo flow:
+        #    check_and_increment returns False  →  user is at daily limit
+        #    call use_turbo()  →  True if weekly turbo was available
+        #      True:  rollback the limit counter (turbo is outside daily quota)
+        #             set is_turbo = True so the teaser fires after download
+        #      False: send the normal "limit reached" message and exit
+        #
+        is_turbo = False
+        limit_ok = await self.limit_service.check_and_increment(user_id, is_premium)
 
-        # ── 3. Скачивание ─────────────────────────────────────────────────
+        if not limit_ok:
+            turbo_granted = await user_repo.use_turbo(user_id)
+            if turbo_granted:
+                # Roll back the counter — the turbo is a separate quota
+                await self.limit_service.rollback(user_id)
+                is_turbo = True
+                logger.info(f"Turbo-Download granted to user {user_id}")
+            else:
+                used, limit = await self.limit_service.get_usage(user_id)
+                await self._safe_send(
+                    user_id,
+                    f"⏳ <b>Лимит на сегодня исчерпан!</b>\n\n"
+                    f"Ты уже скачал <b>{used}/{limit}</b> видео сегодня — это максимум для бесплатного плана.\n\n"
+                    f"💎 <b>Premium</b> — безлимитные загрузки каждый день без ограничений.\n"
+                    f"👥 Или пригласи 3 друзей → /referral и получи <b>24 часа Premium бесплатно!</b>",
+                )
+                return
+
+        # ── 3. Download ───────────────────────────────────────────────────
         try:
             video_bytes, error = await asyncio.wait_for(
                 self._download_with_retries(url),
@@ -146,30 +174,40 @@ class Worker:
             await self._handle_download_error(user_id, platform_key, emoji, error)
             return
 
-        # ── 4. Отправка видео ─────────────────────────────────────────────
-        caption = (
-            f"{emoji} <b>Готово! Лови своё видео 🎉</b>\n\n"
-            f"📲 Понравился бот? Поделись с друзьями → /referral"
-        )
+        # ── 4. Send video ─────────────────────────────────────────────────
+        if is_turbo:
+            caption = (
+                f"{emoji} <b>Готово! Турбо-загрузка выполнена 🚀</b>\n\n"
+                f"📲 Попробуй Premium — каждая загрузка такая же быстрая!"
+            )
+        else:
+            caption = (
+                f"{emoji} <b>Готово! Лови своё видео 🎉</b>\n\n"
+                f"📲 Понравился бот? Поделись с друзьями → /referral"
+            )
+
         sent = await self._send_video(user_id, video_bytes, caption)
 
         if not sent:
             await self.limit_service.rollback(user_id)
             return
 
-        # ── 5. Запись в БД ────────────────────────────────────────────────
+        # ── 5. Log download ───────────────────────────────────────────────
         try:
             dl_repo = DownloadRepo()
             await dl_repo.add_download(user_id, platform_key)
         except Exception as e:
             logger.error(f"Failed to record download for {user_id}: {e}")
 
-        # ── 6. Реклама для не-премиумов ───────────────────────────────────
-        if not is_premium:
+        # ── 6. Post-send messaging ────────────────────────────────────────
+        if is_turbo:
+            # Turbo teaser fires right after the video — timing is perfect
+            await self._safe_send(user_id, _TURBO_TEASER)
+        elif not is_premium:
             await self._send_ad_if_available(user_id)
 
     # ---------------------------------------------------------------------- #
-    #  Отправка видео                                                         #
+    #  Send video                                                             #
     # ---------------------------------------------------------------------- #
 
     async def _send_video(self, user_id: int, video_bytes, caption: str) -> bool:
@@ -228,7 +266,7 @@ class Worker:
             return False
 
     # ---------------------------------------------------------------------- #
-    #  Загрузка с повторами                                                   #
+    #  Download with retries                                                  #
     # ---------------------------------------------------------------------- #
 
     async def _download_with_retries(
@@ -252,7 +290,7 @@ class Worker:
         return None, last_error
 
     # ---------------------------------------------------------------------- #
-    #  Обработка ошибки скачивания                                           #
+    #  Download error handler                                                 #
     # ---------------------------------------------------------------------- #
 
     async def _handle_download_error(
@@ -296,13 +334,12 @@ class Worker:
         await self._safe_send(user_id, msg)
 
     # ---------------------------------------------------------------------- #
-    #  Вспомогательные методы                                                 #
+    #  Helpers                                                                #
     # ---------------------------------------------------------------------- #
 
     async def _send_ad_if_available(self, user_id: int, position: str = "after_download"):
         try:
             ads = await self.ad_service.get_active_ads()
-            # Filter by position (default "after_download" for ads without position field)
             filtered = [
                 a for a in ads
                 if getattr(a, "position", "after_download") == position
