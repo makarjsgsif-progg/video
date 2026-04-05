@@ -37,13 +37,25 @@ def load_translations():
 
 load_translations()
 
-def get_text(lang: str, key: str, **kwargs) -> str:
-    # Сначала пробуем запрошенный язык, потом русский, потом английский
-    text = translations.get(lang, {}).get(key)
+
+def get_text(__lang: str, __key: str, **kwargs) -> str:
+    """
+    Fetch a translated string and format it with kwargs.
+
+    Parameters are intentionally named with double-underscore prefix so they
+    can NEVER collide with translation placeholder names like {lang}, {key},
+    {limit}, {used}, {name}, etc. that callers pass via **kwargs.
+
+    Before this fix, calling:
+        get_text(lang, "profile_text", lang="🇷🇺 Русский", ...)
+    crashed with "TypeError: got multiple values for argument 'lang'"
+    because 'lang' was both a positional param name AND a kwarg key.
+    """
+    text = translations.get(__lang, {}).get(__key)
     if not text:
-        text = translations.get("ru", {}).get(key)
+        text = translations.get("ru", {}).get(__key)
     if not text:
-        text = translations.get("en", {}).get(key, key)
+        text = translations.get("en", {}).get(__key, __key)
     if kwargs:
         return text.format(**kwargs)
     return text
