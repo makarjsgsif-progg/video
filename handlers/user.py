@@ -293,7 +293,9 @@ async def btn_download(message: Message, user_db):
 @router.message(F.text.func(lambda t: t in _BTN_PROFILE))
 @router.message(Command("profile"))
 async def btn_profile(message: Message, user_db, bot: Bot):
-    lang = _get_lang(user_db)
+    # Use 'lc' (language code) as the local variable so it never collides
+    # with the {lang} placeholder in the profile_text translation template.
+    lc = _get_lang(user_db)
     try:
         ls = get_limit_service()
         used, limit = await ls.get_usage(message.from_user.id)
@@ -309,26 +311,28 @@ async def btn_profile(message: Message, user_db, bot: Bot):
         # Premium status line
         if is_premium and getattr(user_db, "premium_until", None):
             until_str = user_db.premium_until.strftime("%d.%m.%Y")
-            status_text = get_text(lang, "premium_status_active", until=until_str)
+            status_text = get_text(lc, "premium_status_active", until=until_str)
         elif is_premium:
-            status_text = get_text(lang, "premium_status_active", until="∞")
+            status_text = get_text(lc, "premium_status_active", until="∞")
         else:
-            status_text = get_text(lang, "premium_status_inactive")
+            status_text = get_text(lc, "premium_status_inactive")
 
         ref_param = getattr(user_db, "referral_code", None) or str(message.from_user.id)
         ref_count = int(getattr(user_db, "referral_count", 0) or 0)
-        lang_display = languages.get(lang, lang.upper())
 
-        # Language emoji map
+        # Language emoji + name displayed inside the profile card
         lang_emoji = {
             "ru": "🇷🇺", "en": "🇬🇧", "es": "🇪🇸", "pt": "🇧🇷",
             "de": "🇩🇪", "fr": "🇫🇷", "hi": "🇮🇳", "ar": "🇸🇦",
-        }.get(lang, "🌍")
+        }.get(lc, "🌍")
+        lang_label = f"{lang_emoji} {languages.get(lc, lc.upper())}"
 
+        # 'lang' kwarg matches the {lang} placeholder in profile_text —
+        # no conflict because the local language-code var is now named 'lc'.
         await message.answer(
             get_text(
-                lang, "profile_text",
-                lang=f"{lang_emoji} {lang_display}",
+                lc, "profile_text",
+                lang=lang_label,
                 used=used,
                 limit=limit,
                 status_text=status_text,
@@ -336,13 +340,12 @@ async def btn_profile(message: Message, user_db, bot: Bot):
                 bot_username=bot_username,
                 ref_param=ref_param,
             ),
-            reply_markup=channel_kb(lang),
+            reply_markup=channel_kb(lc),
         )
     except Exception as e:
         logger.exception(f"btn_profile error for {message.from_user.id}: {e}")
-        # Graceful fallback — never show raw "error_generic" without context
         try:
-            await message.answer(get_text(lang, "error_generic"))
+            await message.answer(get_text(lc, "error_generic"))
         except Exception:
             pass
 
