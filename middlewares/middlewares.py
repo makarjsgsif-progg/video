@@ -1,18 +1,12 @@
 """
 middlewares/middlewares.py
 
-Улучшения:
-- _dict_to_user / _user_to_dict / _make_stub_user: добавлено поле referral_code —
-  раньше отсутствовало, вызывало AttributeError в handlers/user.py при доступе
-  к user_db.referral_code
-- UserMiddleware: кэширование user_db в Redis на 60 сек — убирает N+1 запросов к БД
-- ThrottleMiddleware: раздельный кулдаун для callback_query (0.3 с) и message (0.5 с);
-  устойчивость к ошибкам Redis; периодическая чистка in-memory словаря
-- I18nMiddleware: добавлено логирование при отсутствии user_db
-- BanCheckMiddleware: выделена проверка бана в отдельный middleware — раньше бан
-  проверялся только в handle_url, но пользователь мог вызывать /referral, /premium
-  и т.д. даже будучи заблокированным
-- Все middleware: аннотации типов, docstrings
+Mega Upgrade:
+- ThrottleMiddleware: throttle-сообщения переведены по языку user_db
+- BanCheckMiddleware: бан-сообщение переведено по языку пользователя
+- UserMiddleware: кэш Redis, stub-пользователь при ошибке БД
+- I18nMiddleware: передаёт gettext и lang в data
+- Все поля ORM включая referral_code, referred_by
 """
 
 import json
@@ -28,12 +22,9 @@ from utils.i18n import get_text
 
 logger = logging.getLogger(__name__)
 
-# TTL кэша пользователя (секунды)
 _USER_CACHE_TTL = 60
-# Кулдауны (секунды)
 _MSG_THROTTLE = 0.5
 _CB_THROTTLE = 0.3
-# Порог чистки in-memory throttle dict
 _THROTTLE_CLEANUP_SIZE = 10_000
 _THROTTLE_TTL = 60
 
@@ -70,7 +61,6 @@ def _dict_to_user(d: dict):
     d2 = dict(d)
     d2["premium_until"] = _parse_dt(d.get("premium_until"))
     d2["registered_at"] = _parse_dt(d.get("registered_at"))
-    # Гарантируем наличие всех полей (защита от старых кэшей без новых колонок)
     d2.setdefault("referral_code", None)
     d2.setdefault("referred_by", None)
     d2.setdefault("referral_count", 0)
@@ -78,10 +68,6 @@ def _dict_to_user(d: dict):
 
 
 def _make_stub_user(user_id: int):
-    """
-    Возвращает минимальный объект пользователя при ошибке БД.
-    Позволяет боту продолжать работу без падения.
-    """
     return type("User", (), {
         "id": user_id,
         "language": "ru",
@@ -102,10 +88,7 @@ def _make_stub_user(user_id: int):
 class UserMiddleware(BaseMiddleware):
     """
     Загружает запись пользователя из БД и кладёт в data["user_db"].
-
-    Кэширует в Redis на _USER_CACHE_TTL секунд, чтобы не стучаться в БД
-    при каждом входящем событии. При ошибке Redis — читает напрямую из БД.
-    При ошибке БД — возвращает stub-объект, бот не падает.
+    Кэширует в Redis на _USER_CACHE_TTL секунд.
     """
 
     async def __call__(
@@ -115,20 +98,15 @@ class UserMiddleware(BaseMiddleware):
         data: Dict[str, Any],
     ) -> Any:
         user_id: int | None = getattr(getattr(event, "from_user", None), "id", None)
-
         if user_id is not None:
-            user = await self._get_or_create_user(user_id)
-            data["user_db"] = user
-
+            data["user_db"] = await self._get_or_create_user(user_id)
         return await handler(event, data)
 
     async def _get_or_create_user(self, user_id: int):
         repo = UserRepo()
-
         cached = await self._cache_get(repo, user_id)
         if cached is not None:
             return cached
-
         try:
             user = await repo.get_user(user_id)
             if not user:
@@ -136,11 +114,8 @@ class UserMiddleware(BaseMiddleware):
         except Exception as e:
             logger.exception(f"UserMiddleware: DB error for user {user_id}: {e}")
             return _make_stub_user(user_id)
-
         if user is None:
-            logger.warning(f"UserMiddleware: create_user returned None for {user_id}")
             return _make_stub_user(user_id)
-
         await self._cache_set(repo, user_id, user)
         return user
 
@@ -151,8 +126,7 @@ class UserMiddleware(BaseMiddleware):
                 return None
             raw = await redis.get(f"user_cache:{user_id}")
             if raw:
-                d = json.loads(raw)
-                return _dict_to_user(d)
+                return _dict_to_user(json.loads(raw))
         except Exception as e:
             logger.debug(f"Redis cache get failed for {user_id}: {e}")
         return None
@@ -162,11 +136,10 @@ class UserMiddleware(BaseMiddleware):
             redis = repo._get_redis()
             if redis is None:
                 return
-            d = _user_to_dict(user)
             await redis.setex(
                 f"user_cache:{user_id}",
                 _USER_CACHE_TTL,
-                json.dumps(d, default=str),
+                json.dumps(_user_to_dict(user), default=str),
             )
         except Exception as e:
             logger.debug(f"Redis cache set failed for {user_id}: {e}")
@@ -178,10 +151,9 @@ class UserMiddleware(BaseMiddleware):
 
 class BanCheckMiddleware(BaseMiddleware):
     """
-    Блокирует все действия заблокированных пользователей.
-
-    Должен регистрироваться ПОСЛЕ UserMiddleware (зависит от data["user_db"]).
-    Раньше бан проверялся только в handle_url — теперь работает глобально.
+    Блокирует все действия забаненных пользователей.
+    Сообщение о бане переводится по языку пользователя.
+    Должен регистрироваться ПОСЛЕ UserMiddleware.
     """
 
     async def __call__(
@@ -192,7 +164,7 @@ class BanCheckMiddleware(BaseMiddleware):
     ) -> Any:
         user = data.get("user_db")
         if user and getattr(user, "is_banned", False):
-            lang = getattr(user, "language", "ru")
+            lang = getattr(user, "language", "ru") or "ru"
             ban_text = get_text(lang, "banned")
             if isinstance(event, Message):
                 try:
@@ -204,8 +176,7 @@ class BanCheckMiddleware(BaseMiddleware):
                     await event.answer(ban_text, show_alert=True)
                 except Exception:
                     pass
-            return  # Не передаём в хендлер
-
+            return
         return await handler(event, data)
 
 
@@ -215,11 +186,8 @@ class BanCheckMiddleware(BaseMiddleware):
 
 class ThrottleMiddleware(BaseMiddleware):
     """
-    Ограничивает частоту запросов от одного пользователя.
-
-    Разные кулдауны для message (0.5 с) и callback_query (0.3 с).
-    Использует in-memory словари — устойчив к сбоям Redis.
-    Периодически чистит устаревшие записи при росте словаря.
+    Ограничивает частоту запросов.
+    Throttle-сообщения переведены по языку пользователя.
     """
 
     def __init__(self):
@@ -244,14 +212,16 @@ class ThrottleMiddleware(BaseMiddleware):
 
         last = throttle_map.get(user_id, 0.0)
         if now - last < cooldown:
+            user_db = data.get("user_db")
+            lang = getattr(user_db, "language", "ru") if user_db else "ru"
             if isinstance(event, Message):
                 try:
-                    await event.answer("⏳ Слишком много запросов. Подожди немного.")
+                    await event.answer(get_text(lang, "throttle_message"))
                 except Exception:
                     pass
             elif isinstance(event, CallbackQuery):
                 try:
-                    await event.answer("⏳ Слишком часто. Подожди немного.", show_alert=False)
+                    await event.answer(get_text(lang, "throttle_callback"), show_alert=False)
                 except Exception:
                     pass
             return
@@ -273,10 +243,9 @@ class ThrottleMiddleware(BaseMiddleware):
 
 class I18nMiddleware(BaseMiddleware):
     """
-    Добавляет в data функцию gettext(key, **kwargs) с учётом языка пользователя.
-
-    Зависит от user_db, который должен быть добавлен раньше (UserMiddleware).
-    Если user_db недоступен — использует язык по умолчанию (ru).
+    Добавляет в data:
+    - gettext(key, **kwargs): локализованный текст
+    - lang: строка кода языка пользователя
     """
 
     async def __call__(
@@ -287,7 +256,8 @@ class I18nMiddleware(BaseMiddleware):
     ) -> Any:
         user = data.get("user_db")
         if user is None:
-            logger.debug("I18nMiddleware: user_db not found in data, using default lang 'ru'")
-        lang = getattr(user, "language", "ru") if user else "ru"
+            logger.debug("I18nMiddleware: user_db not found, using default lang 'ru'")
+        lang = (getattr(user, "language", "ru") if user else "ru") or "ru"
         data["gettext"] = lambda key, **kwargs: get_text(lang, key, **kwargs)
+        data["lang"] = lang
         return await handler(event, data)
