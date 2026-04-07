@@ -358,9 +358,31 @@ class QueueService:
         self.queue_key = "download_queue"
 
     async def push_task(self, user_id: int, url: str, platform: str):
+        """
+        Push a download task to the Redis queue.
+
+        Retries up to 3 times with a short backoff to handle the transient
+        "first-connection" failure that can occur when the Redis connection
+        pool has not yet been used (e.g. first request after a cold start).
+        Without this retry the very first URL a user sends would always
+        return an error while the second one would succeed.
+        """
         task = {"user_id": user_id, "url": url, "platform": platform, "attempt": 1}
-        await self.redis.lpush(self.queue_key, json.dumps(task))
-        logger.debug(f"Task pushed: user={user_id} platform={platform}")
+        payload = json.dumps(task)
+        last_exc: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                await self.redis.lpush(self.queue_key, payload)
+                logger.debug(f"Task pushed: user={user_id} platform={platform}")
+                return
+            except Exception as e:
+                last_exc = e
+                logger.warning(
+                    f"push_task attempt {attempt + 1}/3 failed for user={user_id}: {e}"
+                )
+                await asyncio.sleep(0.4 * (attempt + 1))
+        # All retries exhausted — propagate so handle_text shows error_generic
+        raise last_exc
 
     async def pop_task(self, timeout: int = 2) -> Optional[dict]:
         """
