@@ -11,7 +11,6 @@ class Platform(str, Enum):
     FACEBOOK = "facebook"
     VIMEO = "vimeo"
     TWITCH = "twitch"
-    PINTEREST = "pinterest"
     SNAPCHAT = "snapchat"
     LIKEE = "likee"
     TRILLER = "triller"
@@ -26,7 +25,6 @@ PLATFORM_PATTERNS: Final[Dict[Platform, re.Pattern]] = {
     Platform.FACEBOOK: re.compile(r"facebook\.com|fb\.watch", re.I),
     Platform.VIMEO: re.compile(r"vimeo\.com", re.I),
     Platform.TWITCH: re.compile(r"twitch\.tv|clips\.twitch\.tv", re.I),
-    Platform.PINTEREST: re.compile(r"pinterest\.com", re.I),
     Platform.SNAPCHAT: re.compile(r"snapchat\.com", re.I),
     Platform.LIKEE: re.compile(r"likee\.(video|com)", re.I),
     Platform.TRILLER: re.compile(r"triller\.co", re.I),

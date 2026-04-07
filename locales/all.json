@@ -1,6 +1,6 @@
 {
   "ru": {
-    "welcome": "⚡️ Привет, <b>{name}</b>!\n\nСкидывай ссылку на видео — скачаю за секунды, без водяных знаков.\n\n<b>Работаю с:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · и ещё 50+!\n\n📲 Зови друзей → /referral <i>(+5 загрузок за каждого!)</i>",
+    "welcome": "⚡️ Привет, <b>{name}</b>!\n\nСкидывай ссылку на видео — скачаю за секунды, без водяных знаков.\n\n<b>Работаю с:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · и ещё 50+!\n\n📲 Зови друзей → /referral <i>(+5 загрузок за каждого!)</i>",
     "choose_language": "🌍 Выбери язык:",
     "language_set": "Язык обновлён!",
     "unsupported_url": "🤔 <b>Платформа не поддерживается</b>\n\nРаботаю с TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch и 50+ другими.\n\nУбедись, что ссылка ведёт на публичное видео, и попробуй ещё раз!",
@@ -20,7 +20,7 @@
     "btn_buy_tariffs": "💳 Купить тарифы",
     "btn_contact_support": "✍️ Написать в поддержку",
     "btn_share": "📤 Поделиться с другом",
-    "download_hint": "🔗 <b>Скидывай ссылку — скачаю мгновенно!</b>\n\nРаботаю с:\n🎵 TikTok · 📸 Instagram Reels · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 📌 Pinterest · 👻 Snapchat · и ещё 50+\n\n{limit_line}\n\n<i>Просто вставь ссылку прямо сюда 👇</i>",
+    "download_hint": "🔗 <b>Скидывай ссылку — скачаю мгновенно!</b>\n\nРаботаю с:\n🎵 TikTok · 📸 Instagram Reels · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 👻 Snapchat · и ещё 50+\n\n{limit_line}\n\n<i>Просто вставь ссылку прямо сюда 👇</i>",
     "limit_premium": "💎 <b>Безлимит</b> — Premium активен, качай сколько хочешь!",
     "limit_free": "📊 Осталось сегодня: <b>{remaining}/{limit}</b> загрузок",
     "profile_text": "👤 <b>Твой профиль</b>\n\n🌍 Язык: <b>{lang}</b>\n📊 Загружено сегодня: <b>{used}/{limit}</b>\n💎 Премиум: {status_text}\n👥 Приглашено друзей: <b>{ref_count}</b>\n🔗 Реферальная ссылка: <code>https://t.me/{bot_username}?start={ref_param}</code>",
@@ -37,7 +37,7 @@
     "status_limit_line": "📊 Лимит: <b>{used}/{limit}</b> загрузок сегодня",
     "status_queue_empty": "✅ Очередь пуста — отвечу мгновенно!",
     "status_queue_busy": "⏳ Сейчас в очереди: <b>{count}</b> задач",
-    "help_text": "ℹ️ <b>Как пользоваться ботом?</b>\n\n<b>Всё просто:</b>\n1️⃣ Скопируй ссылку на видео из приложения\n2️⃣ Вставь её в этот чат\n3️⃣ Получи видео без водяных знаков за секунды!\n\n<b>Поддерживаемые платформы:</b>\n🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 📌 Pinterest · 👻 Snapchat · и 50+ других\n\n<b>Лимиты:</b>\n• Бесплатно: <b>5 загрузок в день</b>\n• 💎 Premium: <b>безлимитно</b>\n• 👥 Реферал: <b>+5 загрузок</b> за каждого друга\n\n<b>Команды:</b>\n/start — главное меню\n/status — статус очереди и лимитов\n/referral — твоя реферальная ссылка\n/premium — тарифы и подписка\n/donate — поддержать проект\n/support — написать в поддержку\n/set_language — сменить язык\n/help — эта справка",
+    "help_text": "ℹ️ <b>Как пользоваться ботом?</b>\n\n<b>Всё просто:</b>\n1️⃣ Скопируй ссылку на видео из приложения\n2️⃣ Вставь её в этот чат\n3️⃣ Получи видео без водяных знаков за секунды!\n\n<b>Поддерживаемые платформы:</b>\n🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 👻 Snapchat · и 50+ других\n\n<b>Лимиты:</b>\n• Бесплатно: <b>5 загрузок в день</b>\n• 💎 Premium: <b>безлимитно</b>\n• 👥 Реферал: <b>+5 загрузок</b> за каждого друга\n\n<b>Команды:</b>\n/start — главное меню\n/status — статус очереди и лимитов\n/referral — твоя реферальная ссылка\n/premium — тарифы и подписка\n/donate — поддержать проект\n/support — написать в поддержку\n/set_language — сменить язык\n/help — эта справка",
     "referral_bonus_notify": "🔥 <b>Твоя реферальная ссылка сработала!</b>\n\nНовый пользователь только что зарегистрировался по твоей ссылке.\nНа счёт начислено <b>+5 бонусных загрузок</b> 🚀\n\n👥 Ещё <b>3 приглашения</b> — и получишь <b>24 часа Premium</b> бесплатно!\nДелись ссылкой → /referral",
     "channel_subscribe": "📣 Подпишись на наш канал — там обновления, фишки и розыгрыши:",
     "error_generic": "❌ Что-то пошло не так. Попробуй позже.",
@@ -64,7 +64,7 @@
     "download_send_error_retry": "⚠️ <b>Видео скачано, но не отправилось</b>\n\nПопробуй отправить ссылку ещё раз — это должно сработать."
   },
   "en": {
-    "welcome": "⚡️ Hey, <b>{name}</b>!\n\nDrop any video link — I'll grab it in seconds, no watermarks, no BS.\n\n<b>Works with:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · and 50+ more!\n\n📲 Invite friends → /referral <i>(+5 downloads per friend!)</i>",
+    "welcome": "⚡️ Hey, <b>{name}</b>!\n\nDrop any video link — I'll grab it in seconds, no watermarks, no BS.\n\n<b>Works with:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · and 50+ more!\n\n📲 Invite friends → /referral <i>(+5 downloads per friend!)</i>",
     "choose_language": "🌍 Pick your language:",
     "language_set": "Language updated!",
     "unsupported_url": "🤔 <b>Platform not supported</b>\n\nI work with TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch and 50+ others.\n\nMake sure the link is public and try again!",
@@ -84,7 +84,7 @@
     "btn_buy_tariffs": "💳 Buy subscription",
     "btn_contact_support": "✍️ Contact support",
     "btn_share": "📤 Share with a friend",
-    "download_hint": "🔗 <b>Send me a link — I'll download it instantly!</b>\n\nWorks with:\n🎵 TikTok · 📸 Instagram Reels · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 📌 Pinterest · 👻 Snapchat · and 50+ more\n\n{limit_line}\n\n<i>Just paste the link right here 👇</i>",
+    "download_hint": "🔗 <b>Send me a link — I'll download it instantly!</b>\n\nWorks with:\n🎵 TikTok · 📸 Instagram Reels · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 👻 Snapchat · and 50+ more\n\n{limit_line}\n\n<i>Just paste the link right here 👇</i>",
     "limit_premium": "💎 <b>Unlimited</b> — Premium is active, download as much as you want!",
     "limit_free": "📊 Remaining today: <b>{remaining}/{limit}</b> downloads",
     "profile_text": "👤 <b>Your profile</b>\n\n🌍 Language: <b>{lang}</b>\n📊 Downloaded today: <b>{used}/{limit}</b>\n💎 Premium: {status_text}\n👥 Friends invited: <b>{ref_count}</b>\n🔗 Referral link: <code>https://t.me/{bot_username}?start={ref_param}</code>",
@@ -101,7 +101,7 @@
     "status_limit_line": "📊 Limit: <b>{used}/{limit}</b> downloads today",
     "status_queue_empty": "✅ Queue is empty — instant reply!",
     "status_queue_busy": "⏳ Currently in queue: <b>{count}</b> tasks",
-    "help_text": "ℹ️ <b>How to use the bot?</b>\n\n<b>Simple:</b>\n1️⃣ Copy the video link from the app\n2️⃣ Paste it into this chat\n3️⃣ Get the video without watermarks in seconds!\n\n<b>Supported platforms:</b>\n🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 📌 Pinterest · 👻 Snapchat · and 50+ others\n\n<b>Limits:</b>\n• Free: <b>5 downloads/day</b>\n• 💎 Premium: <b>unlimited</b>\n• 👥 Referral: <b>+5 downloads</b> per friend\n\n<b>Commands:</b>\n/start — main menu\n/status — queue & limit status\n/referral — your referral link\n/premium — plans & subscription\n/donate — support the project\n/support — contact support\n/set_language — change language\n/help — this help",
+    "help_text": "ℹ️ <b>How to use the bot?</b>\n\n<b>Simple:</b>\n1️⃣ Copy the video link from the app\n2️⃣ Paste it into this chat\n3️⃣ Get the video without watermarks in seconds!\n\n<b>Supported platforms:</b>\n🎵 TikTok · 📸 Instagram · 🐦 Twitter/X\n🤖 Reddit · 👤 Facebook · 🎬 Vimeo\n🎮 Twitch · 👻 Snapchat · and 50+ others\n\n<b>Limits:</b>\n• Free: <b>5 downloads/day</b>\n• 💎 Premium: <b>unlimited</b>\n• 👥 Referral: <b>+5 downloads</b> per friend\n\n<b>Commands:</b>\n/start — main menu\n/status — queue & limit status\n/referral — your referral link\n/premium — plans & subscription\n/donate — support the project\n/support — contact support\n/set_language — change language\n/help — this help",
     "referral_bonus_notify": "🔥 <b>Your referral link worked!</b>\n\nA new user just signed up via your link.\n<b>+5 bonus downloads</b> added to your account 🚀\n\nMore friends = more free downloads. Share it!",
     "channel_subscribe": "📣 Subscribe to our channel — updates, tips and giveaways:",
     "error_generic": "❌ Something went wrong. Please try again later.",
@@ -128,7 +128,7 @@
     "download_send_error_retry": "⚠️ <b>Video downloaded but couldn't be sent</b>\n\nTry sending the link again — it should work."
   },
   "es": {
-    "welcome": "⚡️ ¡Hola, <b>{name}</b>!\n\nEnvíame un enlace de vídeo — lo descargo en segundos, sin marcas de agua.\n\n<b>Compatible con:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · ¡y más de 50!\n\n📲 Invita amigos → /referral <i>(+5 descargas por amigo!)</i>",
+    "welcome": "⚡️ ¡Hola, <b>{name}</b>!\n\nEnvíame un enlace de vídeo — lo descargo en segundos, sin marcas de agua.\n\n<b>Compatible con:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · ¡y más de 50!\n\n📲 Invita amigos → /referral <i>(+5 descargas por amigo!)</i>",
     "choose_language": "🌍 Elige tu idioma:",
     "language_set": "¡Idioma actualizado!",
     "unsupported_url": "🤔 <b>Plataforma no compatible</b>\n\nFunciono con TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch y más de 50.\n\n¡Asegúrate de que el enlace sea público e inténtalo de nuevo!",
@@ -192,7 +192,7 @@
     "download_send_error_retry": "⚠️ <b>Vídeo descargado pero no se pudo enviar</b>\n\nIntenta enviar el enlace de nuevo."
   },
   "pt": {
-    "welcome": "⚡️ Olá, <b>{name}</b>!\n\nEnvie um link de vídeo — baixo em segundos, sem marcas d'água.\n\n<b>Suportado:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · e mais de 50!\n\n📲 Convide amigos → /referral <i>(+5 downloads por amigo!)</i>",
+    "welcome": "⚡️ Olá, <b>{name}</b>!\n\nEnvie um link de vídeo — baixo em segundos, sem marcas d'água.\n\n<b>Suportado:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · e mais de 50!\n\n📲 Convide amigos → /referral <i>(+5 downloads por amigo!)</i>",
     "choose_language": "🌍 Escolha seu idioma:",
     "language_set": "Idioma atualizado!",
     "unsupported_url": "🤔 <b>Plataforma não suportada</b>\n\nFunciono com TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch e mais de 50.\n\nCertifique-se que o link é público e tente novamente!",
@@ -256,7 +256,7 @@
     "download_send_error_retry": "⚠️ <b>Vídeo baixado mas não foi enviado</b>\n\nTente enviar o link novamente."
   },
   "de": {
-    "welcome": "⚡️ Hey, <b>{name}</b>!\n\nSchick mir einen Video-Link — ich lade ihn in Sekunden herunter, ohne Wasserzeichen.\n\n<b>Unterstützt:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · und 50+ mehr!\n\n📲 Lade Freunde ein → /referral <i>(+5 Downloads pro Freund!)</i>",
+    "welcome": "⚡️ Hey, <b>{name}</b>!\n\nSchick mir einen Video-Link — ich lade ihn in Sekunden herunter, ohne Wasserzeichen.\n\n<b>Unterstützt:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · und 50+ mehr!\n\n📲 Lade Freunde ein → /referral <i>(+5 Downloads pro Freund!)</i>",
     "choose_language": "🌍 Wähle deine Sprache:",
     "language_set": "Sprache aktualisiert!",
     "unsupported_url": "🤔 <b>Plattform nicht unterstützt</b>\n\nIch unterstütze TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch und 50+ mehr.\n\nStell sicher, dass der Link öffentlich ist und versuch es erneut!",
@@ -320,7 +320,7 @@
     "download_send_error_retry": "⚠️ <b>Video heruntergeladen aber nicht gesendet</b>\n\nVersuche den Link erneut zu senden."
   },
   "fr": {
-    "welcome": "⚡️ Salut, <b>{name}</b>!\n\nEnvoie-moi un lien vidéo — je le télécharge en secondes, sans filigrane.\n\n<b>Compatible avec:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · et 50+ autres!\n\n📲 Invite des amis → /referral <i>(+5 téléchargements par ami!)</i>",
+    "welcome": "⚡️ Salut, <b>{name}</b>!\n\nEnvoie-moi un lien vidéo — je le télécharge en secondes, sans filigrane.\n\n<b>Compatible avec:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · et 50+ autres!\n\n📲 Invite des amis → /referral <i>(+5 téléchargements par ami!)</i>",
     "choose_language": "🌍 Choisissez votre langue:",
     "language_set": "Langue mise à jour!",
     "unsupported_url": "🤔 <b>Plateforme non supportée</b>\n\nJe supporte TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch et 50+ autres.\n\nAssure-toi que le lien est public et réessaie!",
@@ -384,7 +384,7 @@
     "download_send_error_retry": "⚠️ <b>Vidéo téléchargée mais non envoyée</b>\n\nEssayez de renvoyer le lien."
   },
   "hi": {
-    "welcome": "⚡️ नमस्ते, <b>{name}</b>!\n\nकोई भी वीडियो लिंक भेजें — सेकंडों में डाउनलोड, बिना वॉटरमार्क!\n\n<b>सपोर्टेड:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · और 50+ अन्य!\n\n📲 दोस्तों को आमंत्रित करें → /referral <i>(प्रति मित्र +5 डाउनलोड!)</i>",
+    "welcome": "⚡️ नमस्ते, <b>{name}</b>!\n\nकोई भी वीडियो लिंक भेजें — सेकंडों में डाउनलोड, बिना वॉटरमार्क!\n\n<b>सपोर्टेड:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · और 50+ अन्य!\n\n📲 दोस्तों को आमंत्रित करें → /referral <i>(प्रति मित्र +5 डाउनलोड!)</i>",
     "choose_language": "🌍 अपनी भाषा चुनें:",
     "language_set": "भाषा अपडेट की गई!",
     "unsupported_url": "🤔 <b>प्लेटफ़ॉर्म समर्थित नहीं है</b>\n\nमैं TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch और 50+ के साथ काम करता हूँ।\n\nसुनिश्चित करें कि लिंक सार्वजनिक है और पुनः प्रयास करें!",
@@ -448,7 +448,7 @@
     "download_send_error_retry": "⚠️ <b>वीडियो डाउनलोड हुआ लेकिन भेजा नहीं जा सका</b>\n\nलिंक फिर से भेजें।"
   },
   "ar": {
-    "welcome": "⚡️ مرحباً، <b>{name}</b>!\n\nأرسل رابط فيديو — سأحمّله في ثوانٍ بدون علامة مائية!\n\n<b>يدعم:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Pinterest · Snapchat · وأكثر من 50 منصة!\n\n📲 ادعُ أصدقاء → /referral <i>(+5 تحميلات لكل صديق!)</i>",
+    "welcome": "⚡️ مرحباً، <b>{name}</b>!\n\nأرسل رابط فيديو — سأحمّله في ثوانٍ بدون علامة مائية!\n\n<b>يدعم:</b> TikTok · Instagram · Twitter/X · Reddit · Facebook · Vimeo · Twitch · Snapchat · وأكثر من 50 منصة!\n\n📲 ادعُ أصدقاء → /referral <i>(+5 تحميلات لكل صديق!)</i>",
     "choose_language": "🌍 اختر لغتك:",
     "language_set": "تم تحديث اللغة!",
     "unsupported_url": "🤔 <b>المنصة غير مدعومة</b>\n\nأعمل مع TikTok, Instagram Reels, Twitter/X, Reddit, Facebook, Vimeo, Twitch وأكثر من 50 منصة.\n\nتأكد أن الرابط عام وأعد المحاولة!",
